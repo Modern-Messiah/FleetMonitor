@@ -1,0 +1,15 @@
+{
+  "name": "fleet-monitor",
+  "private": true,
+  "packageManager": "pnpm@9.12.3",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "format": "pnpm -r format"
+  },
+  "workspaces": [
+    "backend",
+    "frontend"
+  ]
+}
