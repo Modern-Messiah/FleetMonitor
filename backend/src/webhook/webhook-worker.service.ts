@@ -4,7 +4,6 @@ import {
   OnApplicationBootstrap,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { WebhookStatus } from '@prisma/client';
 import { ConsumeMessage } from 'amqplib';
 import { PrismaService } from '../prisma/prisma.service';
 import { QUEUE_EXCHANGE, WEBHOOK_QUEUE, WEBHOOK_ROUTING_KEY } from '../queue/queue.constants';
@@ -95,14 +94,14 @@ export class WebhookWorkerService implements OnApplicationBootstrap {
         create: {
           eventId,
           url: 'not-configured',
-          status: WebhookStatus.FAILED,
+          status: 'FAILED' as any,
           attempts: 0,
           response: 'WEBHOOK_URL is not configured',
           lastAttemptAt: new Date(),
         },
         update: {
           url: 'not-configured',
-          status: WebhookStatus.FAILED,
+          status: 'FAILED' as any,
           response: 'WEBHOOK_URL is not configured',
           lastAttemptAt: new Date(),
         },
@@ -117,7 +116,7 @@ export class WebhookWorkerService implements OnApplicationBootstrap {
       create: {
         eventId,
         url,
-        status: WebhookStatus.PENDING,
+        status: 'PENDING' as any,
         attempts: 0,
       },
       update: {
@@ -145,7 +144,7 @@ export class WebhookWorkerService implements OnApplicationBootstrap {
         await this.prisma.webhookLog.update({
           where: { eventId },
           data: {
-            status: WebhookStatus.SUCCESS,
+            status: 'SUCCESS' as any,
             attempts: attempt,
             lastAttemptAt: now,
             response: responseText || `HTTP ${response.status}`,
@@ -160,7 +159,7 @@ export class WebhookWorkerService implements OnApplicationBootstrap {
         await this.prisma.webhookLog.update({
           where: { eventId },
           data: {
-            status: attempt >= 3 ? WebhookStatus.FAILED : WebhookStatus.PENDING,
+            status: (attempt >= 3 ? 'FAILED' : 'PENDING') as any,
             attempts: attempt,
             lastAttemptAt: now,
             response: message,

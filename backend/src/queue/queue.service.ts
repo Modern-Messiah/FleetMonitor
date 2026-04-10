@@ -5,8 +5,7 @@ import {
   OnModuleDestroy,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { EventType, Severity } from '@prisma/client';
-import { Channel, Connection, ConsumeMessage, connect } from 'amqplib';
+import { Channel, ChannelModel, ConsumeMessage, connect } from 'amqplib';
 import { RedisService } from '../cache/redis.service';
 import { FleetGateway } from '../gateway/fleet.gateway';
 import { PrismaService } from '../prisma/prisma.service';
@@ -25,7 +24,7 @@ import { FleetEventMessage, GpsMessage } from './queue.types';
 @Injectable()
 export class QueueService implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(QueueService.name);
-  private connection?: Connection;
+  private connection?: ChannelModel;
   private channel?: Channel;
 
   constructor(
@@ -42,8 +41,12 @@ export class QueueService implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   async onModuleDestroy() {
-    await this.channel?.close();
-    await this.connection?.close();
+    if (this.channel) {
+      await this.channel.close();
+    }
+    if (this.connection) {
+      await this.connection.close();
+    }
   }
 
   getChannel() {
@@ -72,32 +75,36 @@ export class QueueService implements OnApplicationBootstrap, OnModuleDestroy {
       this.configService.get<string>('RABBITMQ_URL') ||
       'amqp://guest:guest@localhost:5672';
 
-    this.connection = await connect(rabbitUrl);
-    this.channel = await this.connection.createChannel();
+    const connection = await connect(rabbitUrl);
+    const channel = await connection.createChannel();
 
-    await this.channel.assertExchange(QUEUE_EXCHANGE, 'topic', { durable: true });
-    await this.channel.assertQueue(GPS_QUEUE, { durable: true });
-    await this.channel.assertQueue(EVENTS_QUEUE, { durable: true });
-    await this.channel.assertQueue(WEBHOOK_QUEUE, { durable: true });
+    this.connection = connection;
+    this.channel = channel;
 
-    await this.channel.bindQueue(GPS_QUEUE, QUEUE_EXCHANGE, GPS_ROUTING_KEY);
-    await this.channel.bindQueue(EVENTS_QUEUE, QUEUE_EXCHANGE, EVENT_ROUTING_KEY);
-    await this.channel.bindQueue(WEBHOOK_QUEUE, QUEUE_EXCHANGE, WEBHOOK_ROUTING_KEY);
+    await channel.assertExchange(QUEUE_EXCHANGE, 'topic', { durable: true });
+    await channel.assertQueue(GPS_QUEUE, { durable: true });
+    await channel.assertQueue(EVENTS_QUEUE, { durable: true });
+    await channel.assertQueue(WEBHOOK_QUEUE, { durable: true });
 
-    this.channel.prefetch(50);
+    await channel.bindQueue(GPS_QUEUE, QUEUE_EXCHANGE, GPS_ROUTING_KEY);
+    await channel.bindQueue(EVENTS_QUEUE, QUEUE_EXCHANGE, EVENT_ROUTING_KEY);
+    await channel.bindQueue(WEBHOOK_QUEUE, QUEUE_EXCHANGE, WEBHOOK_ROUTING_KEY);
+
+    channel.prefetch(50);
     this.logger.log('RabbitMQ exchange and queues are initialized');
   }
 
   private async startConsumers() {
-    if (!this.channel) {
+    const channel = this.channel;
+    if (!channel) {
       throw new Error('RabbitMQ channel not initialized');
     }
 
-    await this.channel.consume(GPS_QUEUE, async (message) => {
+    await channel.consume(GPS_QUEUE, async (message) => {
       await this.consumeGpsMessage(message);
     });
 
-    await this.channel.consume(EVENTS_QUEUE, async (message) => {
+    await channel.consume(EVENTS_QUEUE, async (message) => {
       await this.consumeEventMessage(message);
     });
 
@@ -105,7 +112,8 @@ export class QueueService implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   private async consumeGpsMessage(message: ConsumeMessage | null) {
-    if (!message || !this.channel) {
+    const channel = this.channel;
+    if (!message || !channel) {
       return;
     }
 
@@ -149,15 +157,16 @@ export class QueueService implements OnApplicationBootstrap, OnModuleDestroy {
         isOnline: true,
       });
 
-      this.channel.ack(message);
+      channel.ack(message);
     } catch (error) {
       this.logger.error(`Failed to process GPS message: ${(error as Error).message}`);
-      this.channel.nack(message, false, false);
+      channel.nack(message, false, false);
     }
   }
 
   private async consumeEventMessage(message: ConsumeMessage | null) {
-    if (!message || !this.channel) {
+    const channel = this.channel;
+    if (!message || !channel) {
       return;
     }
 
@@ -197,15 +206,15 @@ export class QueueService implements OnApplicationBootstrap, OnModuleDestroy {
           vehicleId: vehicle.id,
           isOnline: true,
         });
-        this.channel.ack(message);
+        channel.ack(message);
         return;
       }
 
       const event = await this.prisma.event.create({
         data: {
           vehicleId: vehicle.id,
-          type: payload.type as EventType,
-          severity: payload.severity as Severity,
+          type: payload.type as any,
+          severity: payload.severity as any,
           lat: payload.lat,
           lng: payload.lng,
           timestamp,
@@ -236,10 +245,10 @@ export class QueueService implements OnApplicationBootstrap, OnModuleDestroy {
         await this.publishToWebhookQueue({ eventId: event.id });
       }
 
-      this.channel.ack(message);
+      channel.ack(message);
     } catch (error) {
       this.logger.error(`Failed to process fleet event: ${(error as Error).message}`);
-      this.channel.nack(message, false, false);
+      channel.nack(message, false, false);
     }
   }
 }
