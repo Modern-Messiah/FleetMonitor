@@ -1,10 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { RedisService } from '../cache/redis.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { VEHICLE_REGISTRY_MAP } from '../common/vehicle-registry';
 
 @Injectable()
 export class VehiclesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redisService: RedisService,
+  ) {}
 
   async getOrCreateByDeviceId(deviceId: string) {
     const existing = await this.prisma.vehicle.findUnique({ where: { deviceId } });
@@ -31,5 +35,54 @@ export class VehiclesService {
         lastSeenAt: at,
       },
     });
+  }
+
+  async findAllWithState() {
+    const vehicles = await this.prisma.vehicle.findMany({
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return Promise.all(
+      vehicles.map(async (vehicle) => {
+        const state = await this.redisService.getVehicleState(vehicle.deviceId);
+        return {
+          ...vehicle,
+          isOnline: Boolean(state),
+          state,
+        };
+      }),
+    );
+  }
+
+  async findOneWithTelemetry(id: string) {
+    const vehicle = await this.prisma.vehicle.findUnique({
+      where: { id },
+    });
+
+    if (!vehicle) {
+      throw new NotFoundException('Vehicle not found');
+    }
+
+    const [state, gpsPoints, events] = await Promise.all([
+      this.redisService.getVehicleState(vehicle.deviceId),
+      this.prisma.gpsPoint.findMany({
+        where: { vehicleId: vehicle.id },
+        orderBy: { timestamp: 'desc' },
+        take: 10,
+      }),
+      this.prisma.event.findMany({
+        where: { vehicleId: vehicle.id },
+        orderBy: { timestamp: 'desc' },
+        take: 20,
+      }),
+    ]);
+
+    return {
+      ...vehicle,
+      isOnline: Boolean(state),
+      state,
+      gpsPoints,
+      events,
+    };
   }
 }
