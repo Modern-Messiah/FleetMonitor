@@ -230,6 +230,9 @@ export class QueueService implements OnApplicationBootstrap, OnModuleDestroy {
       });
 
       if (event.severity === 'CRITICAL') {
+        this.logger.warn(
+          `Critical event detected: eventId=${event.id} vehicleId=${event.vehicleId} type=${event.type}`,
+        );
         await this.publishToWebhookQueue({ eventId: event.id });
       }
 
