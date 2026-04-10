@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { CacheModule } from './cache/cache.module';
+import { EventsModule } from './events/events.module';
+import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { QueueModule } from './queue/queue.module';
 import { VehiclesModule } from './vehicles/vehicles.module';
@@ -11,7 +13,9 @@ import { VehiclesModule } from './vehicles/vehicles.module';
     PrismaModule,
     CacheModule,
     VehiclesModule,
+    EventsModule,
     QueueModule,
+    HealthModule,
   ],
 })
 export class AppModule {}
