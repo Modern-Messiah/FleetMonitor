@@ -37,6 +37,39 @@ export class VehiclesService {
     });
   }
 
+  async markStaleOffline(maxSilenceSeconds: number) {
+    const threshold = new Date(Date.now() - maxSilenceSeconds * 1000);
+
+    const staleVehicles = await this.prisma.vehicle.findMany({
+      where: {
+        isOnline: true,
+        lastSeenAt: {
+          lt: threshold,
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (staleVehicles.length === 0) {
+      return [];
+    }
+
+    await this.prisma.vehicle.updateMany({
+      where: {
+        id: {
+          in: staleVehicles.map((vehicle) => vehicle.id),
+        },
+      },
+      data: {
+        isOnline: false,
+      },
+    });
+
+    return staleVehicles;
+  }
+
   async findAllWithState() {
     const vehicles = await this.prisma.vehicle.findMany({
       orderBy: { createdAt: 'asc' },

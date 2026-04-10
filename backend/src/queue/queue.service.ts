@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { EventType, Severity } from '@prisma/client';
 import { Channel, Connection, ConsumeMessage, connect } from 'amqplib';
 import { RedisService } from '../cache/redis.service';
+import { FleetGateway } from '../gateway/fleet.gateway';
 import { PrismaService } from '../prisma/prisma.service';
 import { VehiclesService } from '../vehicles/vehicles.service';
 import {
@@ -32,6 +33,7 @@ export class QueueService implements OnApplicationBootstrap, OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly redisService: RedisService,
     private readonly vehiclesService: VehiclesService,
+    private readonly fleetGateway: FleetGateway,
   ) {}
 
   async onApplicationBootstrap() {
@@ -134,6 +136,19 @@ export class QueueService implements OnApplicationBootstrap, OnModuleDestroy {
         timestamp: timestamp.toISOString(),
       });
 
+      this.fleetGateway.emitGpsUpdate({
+        vehicleId: vehicle.id,
+        lat: payload.lat,
+        lng: payload.lng,
+        speed: payload.speed,
+        heading: payload.heading,
+        timestamp: timestamp.toISOString(),
+      });
+      this.fleetGateway.emitVehicleStatus({
+        vehicleId: vehicle.id,
+        isOnline: true,
+      });
+
       this.channel.ack(message);
     } catch (error) {
       this.logger.error(`Failed to process GPS message: ${(error as Error).message}`);
@@ -157,7 +172,7 @@ export class QueueService implements OnApplicationBootstrap, OnModuleDestroy {
       );
 
       if (dedupEventId) {
-        await this.prisma.event.update({
+        const groupedEvent = await this.prisma.event.update({
           where: { id: dedupEventId },
           data: {
             grouped: true,
@@ -168,6 +183,20 @@ export class QueueService implements OnApplicationBootstrap, OnModuleDestroy {
         });
 
         await this.vehiclesService.touchOnline(vehicle.id, timestamp);
+        this.fleetGateway.emitEventNew({
+          id: groupedEvent.id,
+          vehicleId: groupedEvent.vehicleId,
+          type: groupedEvent.type,
+          severity: groupedEvent.severity,
+          lat: groupedEvent.lat,
+          lng: groupedEvent.lng,
+          timestamp: groupedEvent.timestamp.toISOString(),
+          groupCount: groupedEvent.groupCount,
+        });
+        this.fleetGateway.emitVehicleStatus({
+          vehicleId: vehicle.id,
+          isOnline: true,
+        });
         this.channel.ack(message);
         return;
       }
@@ -185,6 +214,20 @@ export class QueueService implements OnApplicationBootstrap, OnModuleDestroy {
 
       await this.redisService.setEventDedupKey(vehicle.id, payload.type, event.id);
       await this.vehiclesService.touchOnline(vehicle.id, timestamp);
+      this.fleetGateway.emitEventNew({
+        id: event.id,
+        vehicleId: event.vehicleId,
+        type: event.type,
+        severity: event.severity,
+        lat: event.lat,
+        lng: event.lng,
+        timestamp: event.timestamp.toISOString(),
+        groupCount: event.groupCount,
+      });
+      this.fleetGateway.emitVehicleStatus({
+        vehicleId: vehicle.id,
+        isOnline: true,
+      });
 
       if (event.severity === 'CRITICAL') {
         await this.publishToWebhookQueue({ eventId: event.id });
