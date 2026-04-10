@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EventType {
+  DROWSINESS
+  SPEEDING
+  HARSH_BRAKING
+  COLLISION_WARNING
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  CRITICAL
+}
+
+enum WebhookStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+model Vehicle {
+  id           String     @id @default(cuid())
+  deviceId     String     @unique
+  driverName   String
+  licensePlate String
+  isOnline     Boolean    @default(false)
+  lastSeenAt   DateTime?
+  createdAt    DateTime   @default(now())
+  gpsPoints    GpsPoint[]
+  events       Event[]
+}
+
+model GpsPoint {
+  id        String   @id @default(cuid())
+  vehicleId String
+  vehicle   Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  lat       Float
+  lng       Float
+  speed     Int
+  heading   Int
+  timestamp DateTime
+
+  @@index([vehicleId, timestamp(sort: Desc)])
+}
+
+model Event {
+  id         String    @id @default(cuid())
+  vehicleId  String
+  vehicle    Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  type       EventType
+  severity   Severity
+  lat        Float
+  lng        Float
+  timestamp  DateTime
+  grouped    Boolean   @default(false)
+  groupCount Int       @default(1)
+  webhookLog WebhookLog?
+
+  @@index([vehicleId, type, timestamp(sort: Desc)])
+  @@index([severity, timestamp(sort: Desc)])
+}
+
+model WebhookLog {
+  id            String        @id @default(cuid())
+  eventId        String        @unique
+  event          Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  url            String
+  status         WebhookStatus @default(PENDING)
+  attempts       Int           @default(0)
+  lastAttemptAt  DateTime?
+  response       String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
