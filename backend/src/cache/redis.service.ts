@@ -36,6 +36,14 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     await this.client.set(this.getVehicleStateKey(deviceId), JSON.stringify(state), 'EX', 30);
   }
 
+  async setEventDedupKey(vehicleId: string, type: string, eventId: string) {
+    await this.client.set(this.getEventDedupKey(vehicleId, type), eventId, 'EX', 30);
+  }
+
+  async getEventDedupEventId(vehicleId: string, type: string) {
+    return this.client.get(this.getEventDedupKey(vehicleId, type));
+  }
+
   async getVehicleState(deviceId: string) {
     const data = await this.client.get(this.getVehicleStateKey(deviceId));
     return data ? (JSON.parse(data) as VehicleState) : null;
@@ -73,5 +81,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   private getVehicleStateKey(deviceId: string) {
     return `vehicle:${deviceId}:state`;
+  }
+
+  private getEventDedupKey(vehicleId: string, type: string) {
+    return `event:dedup:${vehicleId}:${type}`;
   }
 }

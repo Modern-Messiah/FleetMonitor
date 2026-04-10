@@ -151,6 +151,26 @@ export class QueueService implements OnApplicationBootstrap, OnModuleDestroy {
       const timestamp = new Date(payload.timestamp);
 
       const vehicle = await this.vehiclesService.getOrCreateByDeviceId(payload.device_id);
+      const dedupEventId = await this.redisService.getEventDedupEventId(
+        vehicle.id,
+        payload.type,
+      );
+
+      if (dedupEventId) {
+        await this.prisma.event.update({
+          where: { id: dedupEventId },
+          data: {
+            grouped: true,
+            groupCount: {
+              increment: 1,
+            },
+          },
+        });
+
+        await this.vehiclesService.touchOnline(vehicle.id, timestamp);
+        this.channel.ack(message);
+        return;
+      }
 
       const event = await this.prisma.event.create({
         data: {
@@ -163,6 +183,7 @@ export class QueueService implements OnApplicationBootstrap, OnModuleDestroy {
         },
       });
 
+      await this.redisService.setEventDedupKey(vehicle.id, payload.type, event.id);
       await this.vehiclesService.touchOnline(vehicle.id, timestamp);
 
       if (event.severity === 'CRITICAL') {
