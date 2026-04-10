@@ -1,0 +1,17 @@
+node_modules
+.pnpm-store
+.env
+.env.*
+!.env.example
+backend/dist
+backend/node_modules
+frontend/dist
+frontend/node_modules
+*.log
+.DS_Store
+__pycache__
+*.pyc
+.pytest_cache
+.venv
+coverage
+.codex
