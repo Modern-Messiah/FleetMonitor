@@ -1,0 +1,49 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 213 67% 96%;
+  --foreground: 222 42% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 42% 11%;
+  --primary: 211 78% 38%;
+  --primary-foreground: 0 0% 98%;
+  --secondary: 197 35% 90%;
+  --secondary-foreground: 222 42% 11%;
+  --muted: 210 34% 90%;
+  --muted-foreground: 215 19% 35%;
+  --border: 210 29% 83%;
+  --input: 210 29% 85%;
+  --ring: 211 78% 38%;
+  --radius: 0.9rem;
+}
+
+* {
+  @apply border-border;
+}
+
+body {
+  @apply min-h-screen bg-background text-foreground antialiased;
+  font-family: 'Manrope', system-ui, -apple-system, sans-serif;
+  background-image:
+    radial-gradient(circle at 100% 0%, rgba(59, 130, 246, 0.2), transparent 40%),
+    radial-gradient(circle at 0% 100%, rgba(15, 118, 110, 0.2), transparent 45%);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: 'Space Grotesk', 'Manrope', sans-serif;
+}
+
+#root {
+  @apply min-h-screen;
+}
+
+.leaflet-container {
+  @apply h-full w-full rounded-xl;
+}
