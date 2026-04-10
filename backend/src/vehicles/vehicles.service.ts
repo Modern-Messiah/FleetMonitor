@@ -59,7 +59,7 @@ export class VehiclesService {
     await this.prisma.vehicle.updateMany({
       where: {
         id: {
-          in: staleVehicles.map((vehicle) => vehicle.id),
+          in: staleVehicles.map((vehicle: { id: string }) => vehicle.id),
         },
       },
       data: {
@@ -76,7 +76,7 @@ export class VehiclesService {
     });
 
     return Promise.all(
-      vehicles.map(async (vehicle) => {
+      vehicles.map(async (vehicle: any) => {
         const state = await this.redisService.getVehicleState(vehicle.deviceId);
         return {
           ...vehicle,

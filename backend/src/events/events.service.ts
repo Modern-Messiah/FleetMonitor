@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { EventType, Prisma, Severity } from '@prisma/client';
 import { stringify } from 'csv-stringify/sync';
+import { EventType, Severity } from '../common/domain.constants';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsQueryDto } from './dto/events-query.dto';
 
@@ -60,7 +60,7 @@ export class EventsService {
     });
 
     return stringify(
-      items.map((event) => ({
+      items.map((event: any) => ({
         id: event.id,
         timestamp: event.timestamp.toISOString(),
         deviceId: event.vehicle.deviceId,
@@ -90,8 +90,8 @@ export class EventsService {
     );
   }
 
-  private buildWhere(query: EventsQueryDto): Prisma.EventWhereInput {
-    const where: Prisma.EventWhereInput = {};
+  private buildWhere(query: EventsQueryDto) {
+    const where: any = {};
 
     if (query.vehicleId) {
       where.vehicleId = query.vehicleId;
@@ -106,7 +106,7 @@ export class EventsService {
     }
 
     if (query.dateFrom || query.dateTo) {
-      where.timestamp = {} as Prisma.DateTimeFilter;
+      where.timestamp = {};
       if (query.dateFrom) {
         where.timestamp.gte = new Date(query.dateFrom);
       }

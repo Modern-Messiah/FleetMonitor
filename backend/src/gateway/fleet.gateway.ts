@@ -38,6 +38,13 @@ interface VehicleStatusPayload {
   isOnline: boolean;
 }
 
+interface SnapshotVehicleRecord {
+  id: string;
+  deviceId: string;
+  driverName: string;
+  licensePlate: string;
+}
+
 @WebSocketGateway({
   namespace: '/fleet',
   cors: {
@@ -96,7 +103,7 @@ export class FleetGateway
       return;
     }
 
-    const vehicles = await this.prisma.vehicle.findMany({
+    const vehicles = (await this.prisma.vehicle.findMany({
       where: {
         deviceId: {
           in: states.map((item) => item.deviceId),
@@ -108,7 +115,7 @@ export class FleetGateway
         driverName: true,
         licensePlate: true,
       },
-    });
+    })) as SnapshotVehicleRecord[];
 
     const vehicleMap = new Map(vehicles.map((vehicle) => [vehicle.deviceId, vehicle]));
 
@@ -159,7 +166,7 @@ export class FleetGateway
 
     client.emit(
       'events:history',
-      events.map((event) => ({
+      events.map((event: any) => ({
         id: event.id,
         vehicleId: event.vehicleId,
         deviceId: event.vehicle.deviceId,
@@ -178,7 +185,7 @@ export class FleetGateway
   private async emitOfflineStatuses() {
     const staleVehicles = await this.vehiclesService.markStaleOffline(15);
 
-    staleVehicles.forEach((vehicle) => {
+    staleVehicles.forEach((vehicle: { id: string }) => {
       this.emitVehicleStatus({
         vehicleId: vehicle.id,
         isOnline: false,

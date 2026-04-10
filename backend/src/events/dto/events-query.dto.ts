@@ -1,15 +1,15 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { EventType, Severity } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   IsDateString,
-  IsEnum,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
   Max,
   Min,
 } from 'class-validator';
+import { EVENT_TYPES, EventType, SEVERITIES, Severity } from '../../common/domain.constants';
 
 export class EventsQueryDto {
   @ApiPropertyOptional()
@@ -17,14 +17,14 @@ export class EventsQueryDto {
   @IsString()
   vehicleId?: string;
 
-  @ApiPropertyOptional({ enum: EventType })
+  @ApiPropertyOptional({ enum: EVENT_TYPES })
   @IsOptional()
-  @IsEnum(EventType)
+  @IsIn(EVENT_TYPES)
   type?: EventType;
 
-  @ApiPropertyOptional({ enum: Severity })
+  @ApiPropertyOptional({ enum: SEVERITIES })
   @IsOptional()
-  @IsEnum(Severity)
+  @IsIn(SEVERITIES)
   severity?: Severity;
 
   @ApiPropertyOptional()
