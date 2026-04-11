@@ -80,7 +80,7 @@ async function fetchDashboardData(): Promise<DashboardData> {
       params: {
         dateFrom: dayAgoIso,
         page: 1,
-        limit: 500,
+        limit: 100,
       },
     }),
   ]);
