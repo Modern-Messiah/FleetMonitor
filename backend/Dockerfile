@@ -13,7 +13,7 @@ COPY backend backend
 COPY frontend frontend
 
 RUN pnpm install --filter backend... --no-frozen-lockfile
-RUN pnpm --dir backend prisma generate --schema=prisma/schema.prisma
+RUN cd backend && pnpm prisma generate --schema=prisma/schema.prisma
 RUN pnpm --filter backend build
 
 FROM node:20-alpine AS runtime
