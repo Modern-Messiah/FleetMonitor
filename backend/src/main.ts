@@ -9,9 +9,29 @@ import { AppLogger } from './common/logger/app-logger.service';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   const port = Number(process.env.PORT || 3000);
+  const corsOriginsFromEnv = (process.env.CORS_ORIGIN || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const allowedCorsOrigins = new Set([
+    'http://localhost:8080',
+    'http://0.0.0.0:8080',
+    ...corsOriginsFromEnv,
+  ]);
 
   const logger = app.get(AppLogger);
   app.useLogger(logger);
+  app.enableCors({
+    credentials: true,
+    origin: (origin, callback) => {
+      if (!origin || allowedCorsOrigins.has(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error(`Origin ${origin} is not allowed by CORS`), false);
+    },
+  });
 
   app.setGlobalPrefix('api');
   app.useGlobalPipes(

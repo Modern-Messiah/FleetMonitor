@@ -317,6 +317,7 @@ export function EventsPage() {
             <Input
               ref={dateFromRef}
               type="datetime-local"
+              lang="ru-RU"
               value={filters.dateFrom}
               onChange={(event) => updateFilter('dateFrom', event.target.value)}
               placeholder="Дата от"
@@ -335,6 +336,7 @@ export function EventsPage() {
             <Input
               ref={dateToRef}
               type="datetime-local"
+              lang="ru-RU"
               value={filters.dateTo}
               onChange={(event) => updateFilter('dateTo', event.target.value)}
               placeholder="Дата до"
