@@ -2,9 +2,9 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 
 const navItems = [
-  { to: '/map', label: 'Map' },
-  { to: '/events', label: 'Events' },
-  { to: '/dashboard', label: 'Dashboard' },
+  { to: '/map', label: 'Карта' },
+  { to: '/events', label: 'События' },
+  { to: '/dashboard', label: 'Дашборд' },
 ];
 
 export function AppShell() {
@@ -14,9 +14,9 @@ export function AppShell() {
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-              Fleet Monitor
+              Мониторинг автопарка
             </p>
-            <h1 className="text-lg font-semibold">Realtime Operations Console</h1>
+            <h1 className="text-lg font-semibold">Консоль мониторинга автопарка</h1>
           </div>
           <nav className="flex gap-1 rounded-lg bg-secondary/60 p-1">
             {navItems.map((item) => (

@@ -31,11 +31,11 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     return (
       <div className="mx-auto flex min-h-screen max-w-lg items-center px-4">
         <Card className="w-full space-y-3 p-6 text-center">
-          <CardTitle>Something went wrong</CardTitle>
+          <CardTitle>Что-то пошло не так</CardTitle>
           <CardDescription>
-            An unexpected error happened while rendering this page.
+            Во время отображения страницы произошла непредвиденная ошибка.
           </CardDescription>
-          <Button onClick={() => window.location.reload()}>Reload</Button>
+          <Button onClick={() => window.location.reload()}>Перезагрузить</Button>
         </Card>
       </div>
     );

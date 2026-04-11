@@ -28,6 +28,21 @@ interface LiveVehicle {
 
 const center: [number, number] = [43.238, 76.945];
 
+function formatEventType(type: FleetEvent['type']) {
+  switch (type) {
+    case 'DROWSINESS':
+      return 'Сонливость';
+    case 'SPEEDING':
+      return 'Превышение скорости';
+    case 'HARSH_BRAKING':
+      return 'Резкое торможение';
+    case 'COLLISION_WARNING':
+      return 'Опасность столкновения';
+    default:
+      return type;
+  }
+}
+
 function onlineIcon(isOnline: boolean) {
   const color = isOnline ? '#2563eb' : '#64748b';
   return L.divIcon({
@@ -236,7 +251,7 @@ export function MapPage() {
           () => (
             <div className="rounded-lg border border-red-200 bg-white px-3 py-2 shadow-lg">
               <p className="text-sm font-semibold text-red-700">
-                {vehicle?.driverName || 'Unknown driver'} · {event.type}
+                {vehicle?.driverName || 'Неизвестный водитель'} · {formatEventType(event.type)}
               </p>
               <div className="mt-1">
                 <SeverityBadge severity={event.severity} />
@@ -266,8 +281,8 @@ export function MapPage() {
   if (isError) {
     return (
       <Card className="space-y-2 p-5">
-        <CardTitle>Failed to load map data</CardTitle>
-        <CardDescription>Unable to fetch vehicles from backend API.</CardDescription>
+        <CardTitle>Не удалось загрузить данные карты</CardTitle>
+        <CardDescription>Не получилось получить список машин с backend API.</CardDescription>
       </Card>
     );
   }
@@ -275,8 +290,8 @@ export function MapPage() {
   if (!vehicles.length) {
     return (
       <Card className="space-y-2 p-5">
-        <CardTitle>No vehicles yet</CardTitle>
-        <CardDescription>Start simulator to see live markers on the map.</CardDescription>
+        <CardTitle>Пока нет машин</CardTitle>
+        <CardDescription>Запустите симулятор, чтобы увидеть маркеры на карте в реальном времени.</CardDescription>
       </Card>
     );
   }
@@ -284,9 +299,9 @@ export function MapPage() {
   return (
     <div className="space-y-4">
       <Card className="space-y-1">
-        <CardTitle>Live Fleet Map</CardTitle>
+        <CardTitle>Живая карта автопарка</CardTitle>
         <CardDescription>
-          Realtime GPS stream with reconnect snapshot and one-hour event history.
+          Поток GPS в реальном времени, snapshot при reconnect и история событий за последний час.
         </CardDescription>
       </Card>
 
@@ -311,27 +326,27 @@ export function MapPage() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 text-xs">
-                    <p>Speed: {vehicle.speed} km/h</p>
-                    <p>Heading: {vehicle.heading}</p>
+                    <p>Скорость: {vehicle.speed} км/ч</p>
+                    <p>Курс: {vehicle.heading}</p>
                     <p className="col-span-2">
-                      Last update:{' '}
-                      {vehicle.timestamp ? formatDateTime(vehicle.timestamp) : 'No data'}
+                      Последнее обновление:{' '}
+                      {vehicle.timestamp ? formatDateTime(vehicle.timestamp) : 'Нет данных'}
                     </p>
                   </div>
 
                   <div className="space-y-1">
-                    <p className="text-xs font-semibold uppercase text-slate-500">Recent events</p>
+                    <p className="text-xs font-semibold uppercase text-slate-500">Последние события</p>
                     {(eventsByVehicle[vehicle.id] || []).slice(0, 3).map((event) => (
                       <div
                         key={`${vehicle.id}-${event.id}`}
                         className="flex items-center justify-between rounded-md bg-slate-100 px-2 py-1 text-xs"
                       >
-                        <span>{event.type}</span>
+                        <span>{formatEventType(event.type)}</span>
                         <SeverityBadge severity={event.severity} />
                       </div>
                     ))}
                     {!(eventsByVehicle[vehicle.id] || []).length && (
-                      <p className="text-xs text-slate-500">No recent events</p>
+                      <p className="text-xs text-slate-500">Нет недавних событий</p>
                     )}
                   </div>
                 </div>

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { CalendarDays } from 'lucide-react';
 import { useFleetSocket } from '@/hooks/use-fleet-socket';
 import { API_BASE_URL, api } from '@/lib/api';
 import { formatDateTime } from '@/lib/date';
@@ -46,6 +47,34 @@ const EVENT_TYPES: EventType[] = [
 
 const SEVERITIES: Severity[] = ['LOW', 'MEDIUM', 'CRITICAL'];
 
+function formatEventType(type: EventType) {
+  switch (type) {
+    case 'DROWSINESS':
+      return 'Сонливость';
+    case 'SPEEDING':
+      return 'Превышение скорости';
+    case 'HARSH_BRAKING':
+      return 'Резкое торможение';
+    case 'COLLISION_WARNING':
+      return 'Опасность столкновения';
+    default:
+      return type;
+  }
+}
+
+function formatSeverity(severity: Severity) {
+  switch (severity) {
+    case 'LOW':
+      return 'Низкая';
+    case 'MEDIUM':
+      return 'Средняя';
+    case 'CRITICAL':
+      return 'Критическая';
+    default:
+      return severity;
+  }
+}
+
 function toIsoOrUndefined(value: string) {
   if (!value) {
     return undefined;
@@ -80,8 +109,8 @@ function normalizeLiveEvent(event: FleetEvent, vehicles: Vehicle[]): EventsItem 
     vehicle: {
       id: vehicle?.id || event.vehicleId,
       deviceId: vehicle?.deviceId || 'unknown',
-      driverName: vehicle?.driverName || 'Unknown driver',
-      licensePlate: vehicle?.licensePlate || 'unknown',
+      driverName: vehicle?.driverName || 'Неизвестный водитель',
+      licensePlate: vehicle?.licensePlate || 'неизвестно',
     },
   };
 }
@@ -119,6 +148,24 @@ function matchesFilters(event: EventsItem, filters: EventsFilters) {
 }
 
 export function EventsPage() {
+  const dateFromRef = useRef<HTMLInputElement>(null);
+  const dateToRef = useRef<HTMLInputElement>(null);
+
+  const openDatePicker = (input: HTMLInputElement | null) => {
+    if (!input) {
+      return;
+    }
+
+    input.focus();
+    const pickerInput = input as HTMLInputElement & { showPicker?: () => void };
+    if (typeof pickerInput.showPicker === 'function') {
+      pickerInput.showPicker();
+      return;
+    }
+
+    input.click();
+  };
+
   const [filters, setFilters] = useState<EventsFilters>({
     vehicleId: '',
     type: '',
@@ -225,9 +272,9 @@ export function EventsPage() {
   return (
     <div className="space-y-4">
       <Card className="space-y-1">
-        <CardTitle>Events Journal</CardTitle>
+        <CardTitle>Журнал событий</CardTitle>
         <CardDescription>
-          Filter, search, export CSV, and receive new events in realtime.
+          Фильтрация, поиск, экспорт CSV и получение новых событий в реальном времени.
         </CardDescription>
       </Card>
 
@@ -237,7 +284,7 @@ export function EventsPage() {
             value={filters.vehicleId}
             onChange={(event) => updateFilter('vehicleId', event.target.value)}
           >
-            <option value="">All vehicles</option>
+            <option value="">Все машины</option>
             {vehicles.map((vehicle) => (
               <option key={vehicle.id} value={vehicle.id}>
                 {vehicle.driverName} ({vehicle.licensePlate})
@@ -246,10 +293,10 @@ export function EventsPage() {
           </Select>
 
           <Select value={filters.type} onChange={(event) => updateFilter('type', event.target.value as '' | EventType)}>
-            <option value="">All event types</option>
+            <option value="">Все типы событий</option>
             {EVENT_TYPES.map((type) => (
               <option key={type} value={type}>
-                {type}
+                {formatEventType(type)}
               </option>
             ))}
           </Select>
@@ -258,39 +305,63 @@ export function EventsPage() {
             value={filters.severity}
             onChange={(event) => updateFilter('severity', event.target.value as '' | Severity)}
           >
-            <option value="">All severities</option>
+            <option value="">Все уровни</option>
             {SEVERITIES.map((severity) => (
               <option key={severity} value={severity}>
-                {severity}
+                {formatSeverity(severity)}
               </option>
             ))}
           </Select>
 
-          <Input
-            type="datetime-local"
-            value={filters.dateFrom}
-            onChange={(event) => updateFilter('dateFrom', event.target.value)}
-            placeholder="Date from"
-          />
-          <Input
-            type="datetime-local"
-            value={filters.dateTo}
-            onChange={(event) => updateFilter('dateTo', event.target.value)}
-            placeholder="Date to"
-          />
+          <div className="relative">
+            <Input
+              ref={dateFromRef}
+              type="datetime-local"
+              value={filters.dateFrom}
+              onChange={(event) => updateFilter('dateFrom', event.target.value)}
+              placeholder="Дата от"
+              className="pr-9 [color-scheme:light] [&::-webkit-calendar-picker-indicator]:opacity-0"
+            />
+            <button
+              type="button"
+              aria-label="Открыть календарь (дата от)"
+              onClick={() => openDatePicker(dateFromRef.current)}
+              className="absolute right-2 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded text-muted-foreground hover:text-foreground"
+            >
+              <CalendarDays className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="relative">
+            <Input
+              ref={dateToRef}
+              type="datetime-local"
+              value={filters.dateTo}
+              onChange={(event) => updateFilter('dateTo', event.target.value)}
+              placeholder="Дата до"
+              className="pr-9 [color-scheme:light] [&::-webkit-calendar-picker-indicator]:opacity-0"
+            />
+            <button
+              type="button"
+              aria-label="Открыть календарь (дата до)"
+              onClick={() => openDatePicker(dateToRef.current)}
+              className="absolute right-2 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded text-muted-foreground hover:text-foreground"
+            >
+              <CalendarDays className="h-4 w-4" />
+            </button>
+          </div>
           <Input
             value={filters.search}
             onChange={(event) => updateFilter('search', event.target.value)}
-            placeholder="Driver or plate"
+            placeholder="Водитель или номер"
           />
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm text-muted-foreground">
-            Total: {eventsQuery.data?.total ?? 0} events
+            Всего: {eventsQuery.data?.total ?? 0} событий
           </p>
           <Button variant="outline" onClick={exportCsv}>
-            Export CSV
+            Экспорт CSV
           </Button>
         </div>
 
@@ -305,12 +376,12 @@ export function EventsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Time</TableHead>
-                  <TableHead>Vehicle</TableHead>
-                  <TableHead>Driver</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Severity</TableHead>
-                  <TableHead>Coordinates</TableHead>
+                  <TableHead>Время</TableHead>
+                  <TableHead>Машина</TableHead>
+                  <TableHead>Водитель</TableHead>
+                  <TableHead>Тип</TableHead>
+                  <TableHead>Уровень</TableHead>
+                  <TableHead>Координаты</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -321,7 +392,7 @@ export function EventsPage() {
                     <TableCell>{item.vehicle.driverName}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <span>{item.type}</span>
+                        <span>{formatEventType(item.type)}</span>
                         {item.groupCount > 1 && <Badge variant="outline">x{item.groupCount}</Badge>}
                       </div>
                     </TableCell>
@@ -338,7 +409,7 @@ export function EventsPage() {
           </div>
         ) : (
           <div className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-            No events found for selected filters.
+            По выбранным фильтрам события не найдены.
           </div>
         )}
 
@@ -348,17 +419,17 @@ export function EventsPage() {
             disabled={page <= 1}
             onClick={() => setPage((current) => Math.max(current - 1, 1))}
           >
-            Previous
+            Назад
           </Button>
           <p className="min-w-24 text-center text-sm text-muted-foreground">
-            Page {page} / {totalPages}
+            Страница {page} / {totalPages}
           </p>
           <Button
             variant="outline"
             disabled={page >= totalPages}
             onClick={() => setPage((current) => Math.min(current + 1, totalPages))}
           >
-            Next
+            Вперед
           </Button>
         </div>
       </Card>

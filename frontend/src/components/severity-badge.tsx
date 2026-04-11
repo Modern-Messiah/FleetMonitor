@@ -3,12 +3,12 @@ import { Badge } from './ui/badge';
 
 export function SeverityBadge({ severity }: { severity: Severity }) {
   if (severity === 'LOW') {
-    return <Badge variant="slate">LOW</Badge>;
+    return <Badge variant="slate">Низкий</Badge>;
   }
 
   if (severity === 'MEDIUM') {
-    return <Badge variant="yellow">MEDIUM</Badge>;
+    return <Badge variant="yellow">Средний</Badge>;
   }
 
-  return <Badge variant="red">CRITICAL</Badge>;
+  return <Badge variant="red">Критический</Badge>;
 }

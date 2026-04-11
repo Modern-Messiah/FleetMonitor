@@ -33,6 +33,21 @@ interface DashboardData {
   topVehicles: Array<{ name: string; count: number }>;
 }
 
+function formatEventType(type: EventsListResponse['items'][number]['type']) {
+  switch (type) {
+    case 'DROWSINESS':
+      return 'Сонливость';
+    case 'SPEEDING':
+      return 'Превышение скорости';
+    case 'HARSH_BRAKING':
+      return 'Резкое торможение';
+    case 'COLLISION_WARNING':
+      return 'Опасность столкновения';
+    default:
+      return type;
+  }
+}
+
 async function fetchEventsTotal(dateFromIso: string) {
   const response = await api.get<EventsListResponse>('/events', {
     params: {
@@ -130,8 +145,8 @@ export function DashboardPage() {
   if (dashboardQuery.isError || !data) {
     return (
       <Card className="space-y-2 p-5">
-        <CardTitle>Failed to load dashboard</CardTitle>
-        <CardDescription>Unable to gather analytics from backend API.</CardDescription>
+        <CardTitle>Не удалось загрузить дашборд</CardTitle>
+        <CardDescription>Не получилось получить аналитику с backend API.</CardDescription>
       </Card>
     );
   }
@@ -139,19 +154,19 @@ export function DashboardPage() {
   return (
     <div className="space-y-4">
       <Card className="space-y-1">
-        <CardTitle>Fleet Dashboard</CardTitle>
-        <CardDescription>Auto-refreshing analytics every 30 seconds.</CardDescription>
+        <CardTitle>Дашборд автопарка</CardTitle>
+        <CardDescription>Аналитика автоматически обновляется каждые 30 секунд.</CardDescription>
       </Card>
 
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Online Vehicles" value={data.onlineVehicles} note="Updated from live Redis state" />
-        <StatCard title="Offline Vehicles" value={data.offlineVehicles} note="No GPS updates in recent window" />
-        <StatCard title="Events / Hour" value={data.eventsLastHour} note="Last 60 minutes" />
-        <StatCard title="Events / Day" value={data.eventsLastDay} note="Last 24 hours" />
+        <StatCard title="Онлайн машин" value={data.onlineVehicles} note="Обновляется по живому состоянию из Redis" />
+        <StatCard title="Оффлайн машин" value={data.offlineVehicles} note="Нет GPS-обновлений за последнее время" />
+        <StatCard title="Событий за час" value={data.eventsLastHour} note="Последние 60 минут" />
+        <StatCard title="Событий за день" value={data.eventsLastDay} note="Последние 24 часа" />
       </div>
 
       <Card className="space-y-3">
-        <CardTitle>Top 5 Vehicles by Event Count</CardTitle>
+        <CardTitle>Топ-5 машин по числу событий</CardTitle>
         <div className="h-[320px] w-full">
           {chartData.length ? (
             <ResponsiveContainer width="100%" height="100%">
@@ -171,24 +186,24 @@ export function DashboardPage() {
             </ResponsiveContainer>
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              Not enough event data yet.
+              Пока недостаточно данных по событиям.
             </div>
           )}
         </div>
       </Card>
 
       <Card className="space-y-3">
-        <CardTitle>Critical Events (24h)</CardTitle>
+        <CardTitle>Критические события за 24 часа</CardTitle>
         {data.criticalEvents.length ? (
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Time</TableHead>
-                  <TableHead>Driver</TableHead>
-                  <TableHead>Vehicle</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Severity</TableHead>
+                  <TableHead>Время</TableHead>
+                  <TableHead>Водитель</TableHead>
+                  <TableHead>Машина</TableHead>
+                  <TableHead>Тип</TableHead>
+                  <TableHead>Уровень</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -197,7 +212,7 @@ export function DashboardPage() {
                     <TableCell>{formatDateTime(event.timestamp)}</TableCell>
                     <TableCell>{event.vehicle.driverName}</TableCell>
                     <TableCell>{event.vehicle.licensePlate}</TableCell>
-                    <TableCell>{event.type}</TableCell>
+                    <TableCell>{formatEventType(event.type)}</TableCell>
                     <TableCell>
                       <SeverityBadge severity={event.severity} />
                     </TableCell>
@@ -208,7 +223,7 @@ export function DashboardPage() {
           </div>
         ) : (
           <div className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-            No critical events in the last 24 hours.
+            За последние 24 часа критических событий не было.
           </div>
         )}
       </Card>
