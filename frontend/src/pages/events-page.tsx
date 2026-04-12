@@ -176,6 +176,7 @@ export function EventsPage() {
   });
   const [page, setPage] = useState(1);
   const [liveItems, setLiveItems] = useState<EventsItem[]>([]);
+  const [liveNewCount, setLiveNewCount] = useState(0);
 
   const { data: vehicles = [] } = useQuery({
     queryKey: ['vehicles-select'],
@@ -197,6 +198,7 @@ export function EventsPage() {
 
   useEffect(() => {
     setLiveItems([]);
+    setLiveNewCount(0);
   }, [filters, page]);
 
   useFleetSocket({
@@ -219,6 +221,11 @@ export function EventsPage() {
             ...normalized,
           };
           return next;
+        }
+
+        const isAlreadyInBase = eventsQuery.data?.items.some((i) => i.id === normalized.id);
+        if (!isAlreadyInBase) {
+          setLiveNewCount((c) => c + 1);
         }
 
         return [normalized, ...previous].slice(0, 20);
@@ -378,7 +385,7 @@ export function EventsPage() {
 
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm text-muted-foreground">
-            Всего: {eventsQuery.data?.total ?? 0} событий
+            Всего: {(eventsQuery.data?.total ?? 0) + liveNewCount} событий
           </p>
           <Button variant="outline" onClick={exportCsv}>
             Экспорт CSV
