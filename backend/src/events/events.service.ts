@@ -82,7 +82,6 @@ export class EventsService {
           'Уровень': severityRu,
           'Широта': event.lat,
           'Долгота': event.lng,
-          'Количество': event.groupCount,
         };
       }),
       {
