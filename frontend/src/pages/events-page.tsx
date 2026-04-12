@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
@@ -281,36 +281,54 @@ export function EventsPage() {
       <Card className="space-y-4">
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-6">
           <Select
-            value={filters.vehicleId}
-            onChange={(event) => updateFilter('vehicleId', event.target.value)}
+            value={filters.vehicleId || 'ALL'}
+            onValueChange={(value) => updateFilter('vehicleId', value === 'ALL' ? '' : value)}
           >
-            <option value="">Все машины</option>
-            {vehicles.map((vehicle) => (
-              <option key={vehicle.id} value={vehicle.id}>
-                {vehicle.driverName} ({vehicle.licensePlate})
-              </option>
-            ))}
-          </Select>
-
-          <Select value={filters.type} onChange={(event) => updateFilter('type', event.target.value as '' | EventType)}>
-            <option value="">Все типы событий</option>
-            {EVENT_TYPES.map((type) => (
-              <option key={type} value={type}>
-                {formatEventType(type)}
-              </option>
-            ))}
+            <SelectTrigger>
+              <SelectValue placeholder="Все машины" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Все машины</SelectItem>
+              {vehicles.map((vehicle) => (
+                <SelectItem key={vehicle.id} value={vehicle.id}>
+                  {vehicle.driverName} ({vehicle.licensePlate})
+                </SelectItem>
+              ))}
+            </SelectContent>
           </Select>
 
           <Select
-            value={filters.severity}
-            onChange={(event) => updateFilter('severity', event.target.value as '' | Severity)}
+            value={filters.type || 'ALL'}
+            onValueChange={(value) => updateFilter('type', value === 'ALL' ? '' : value as EventType)}
           >
-            <option value="">Все уровни</option>
-            {SEVERITIES.map((severity) => (
-              <option key={severity} value={severity}>
-                {formatSeverity(severity)}
-              </option>
-            ))}
+            <SelectTrigger>
+              <SelectValue placeholder="Все типы событий" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Все типы событий</SelectItem>
+              {EVENT_TYPES.map((type) => (
+                <SelectItem key={type} value={type}>
+                  {formatEventType(type)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={filters.severity || 'ALL'}
+            onValueChange={(value) => updateFilter('severity', value === 'ALL' ? '' : value as Severity)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Все уровни" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Все уровни</SelectItem>
+              {SEVERITIES.map((severity) => (
+                <SelectItem key={severity} value={severity}>
+                  {formatSeverity(severity)}
+                </SelectItem>
+              ))}
+            </SelectContent>
           </Select>
 
           <div className="relative">
