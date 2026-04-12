@@ -23,7 +23,9 @@ WORKDIR /app
 
 RUN corepack enable
 
-COPY --from=build /app /app
+COPY --from=build /app/package.json /app/pnpm-workspace.yaml /app/
+COPY --from=build /app/node_modules /app/node_modules
+COPY --from=build /app/backend /app/backend
 
 WORKDIR /app/backend
 

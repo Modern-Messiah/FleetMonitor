@@ -2,6 +2,7 @@ import { Controller, Get, Query, Res } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 import { EventsQueryDto } from './dto/events-query.dto';
+import { EventsListResponseDto } from './dto/response.dto';
 import { EventsService } from './events.service';
 
 @ApiTags('events')
@@ -11,7 +12,7 @@ export class EventsController {
 
   @Get()
   @ApiOperation({ summary: 'Get events list with filtering and pagination' })
-  @ApiOkResponse({ description: 'Events list' })
+  @ApiOkResponse({ description: 'Events list', type: EventsListResponseDto })
   findMany(@Query() query: EventsQueryDto) {
     return this.eventsService.findMany(query);
   }
