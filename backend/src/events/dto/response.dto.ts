@@ -3,25 +3,25 @@ import { EventType, Severity } from '../../common/domain.constants';
 
 export class VehicleResponseDto {
   @ApiProperty()
-  id: string;
+  id!: string;
 
   @ApiProperty()
-  deviceId: string;
+  deviceId!: string;
 
   @ApiProperty()
-  driverName: string;
+  driverName!: string;
 
   @ApiProperty()
-  licensePlate: string;
+  licensePlate!: string;
 
   @ApiProperty()
-  isOnline: boolean;
+  isOnline!: boolean;
 
   @ApiProperty()
-  lastSeenAt: Date;
+  lastSeenAt!: Date;
 
   @ApiProperty()
-  createdAt: Date;
+  createdAt!: Date;
 
   @ApiPropertyOptional()
   lat?: number;
@@ -38,54 +38,54 @@ export class VehicleResponseDto {
 
 export class GpsPointResponseDto {
   @ApiProperty()
-  id: string;
+  id!: string;
 
   @ApiProperty()
-  vehicleId: string;
+  vehicleId!: string;
 
   @ApiProperty()
-  lat: number;
+  lat!: number;
 
   @ApiProperty()
-  lng: number;
+  lng!: number;
 
   @ApiProperty()
-  speed: number;
+  speed!: number;
 
   @ApiProperty()
-  heading: number;
+  heading!: number;
 
   @ApiProperty()
-  timestamp: Date;
+  timestamp!: Date;
 }
 
 export class EventResponseDto {
   @ApiProperty()
-  id: string;
+  id!: string;
 
   @ApiProperty()
-  vehicleId: string;
+  vehicleId!: string;
 
   @ApiProperty({ enum: ['DROWSINESS', 'SPEEDING', 'HARSH_BRAKING', 'COLLISION_WARNING'] })
-  type: EventType;
+  type!: EventType;
 
   @ApiProperty({ enum: ['LOW', 'MEDIUM', 'CRITICAL'] })
-  severity: Severity;
+  severity!: Severity;
 
   @ApiProperty()
-  lat: number;
+  lat!: number;
 
   @ApiProperty()
-  lng: number;
+  lng!: number;
 
   @ApiProperty()
-  timestamp: Date;
+  timestamp!: Date;
 
   @ApiProperty()
-  grouped: boolean;
+  grouped!: boolean;
 
   @ApiProperty()
-  groupCount: number;
+  groupCount!: number;
 
   @ApiPropertyOptional({ type: () => VehicleResponseDto })
   vehicle?: VehicleResponseDto;
@@ -93,25 +93,25 @@ export class EventResponseDto {
 
 export class VehicleDetailsResponseDto extends VehicleResponseDto {
   @ApiProperty({ type: [GpsPointResponseDto] })
-  recentGps: GpsPointResponseDto[];
+  recentGps!: GpsPointResponseDto[];
 
   @ApiProperty({ type: [EventResponseDto] })
-  recentEvents: EventResponseDto[];
+  recentEvents!: EventResponseDto[];
 }
 
 export class EventsListResponseDto {
   @ApiProperty({ type: [EventResponseDto] })
-  items: EventResponseDto[];
+  items!: EventResponseDto[];
 
   @ApiProperty()
-  total: number;
+  total!: number;
 
   @ApiProperty()
-  page: number;
+  page!: number;
 
   @ApiProperty()
-  limit: number;
+  limit!: number;
 
   @ApiProperty()
-  totalPages: number;
+  totalPages!: number;
 }
