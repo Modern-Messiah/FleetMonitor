@@ -60,32 +60,33 @@ export class EventsService {
     });
 
     return stringify(
-      items.map((event: any) => ({
-        id: event.id,
-        timestamp: event.timestamp.toISOString(),
-        deviceId: event.vehicle.deviceId,
-        driverName: event.vehicle.driverName,
-        licensePlate: event.vehicle.licensePlate,
-        type: event.type,
-        severity: event.severity,
-        lat: event.lat,
-        lng: event.lng,
-        groupCount: event.groupCount,
-      })),
+      items.map((event: any) => {
+        let typeRu = event.type;
+        if (typeRu === 'DROWSINESS') typeRu = 'Сонливость';
+        else if (typeRu === 'SPEEDING') typeRu = 'Превышение скорости';
+        else if (typeRu === 'HARSH_BRAKING') typeRu = 'Резкое торможение';
+        else if (typeRu === 'COLLISION_WARNING') typeRu = 'Опасность столкновения';
+
+        let severityRu = event.severity;
+        if (severityRu === 'LOW') severityRu = 'Низкий';
+        else if (severityRu === 'MEDIUM') severityRu = 'Средний';
+        else if (severityRu === 'CRITICAL') severityRu = 'Критический';
+
+        return {
+          'ID': event.id,
+          'Время': new Date(event.timestamp).toLocaleString('ru-RU'),
+          'Трекер': event.vehicle.deviceId,
+          'Водитель': event.vehicle.driverName,
+          'Номер авто': event.vehicle.licensePlate,
+          'Тип события': typeRu,
+          'Уровень': severityRu,
+          'Широта': event.lat,
+          'Долгота': event.lng,
+          'Количество': event.groupCount,
+        };
+      }),
       {
         header: true,
-        columns: [
-          'id',
-          'timestamp',
-          'deviceId',
-          'driverName',
-          'licensePlate',
-          'type',
-          'severity',
-          'lat',
-          'lng',
-          'groupCount',
-        ],
       },
     );
   }
