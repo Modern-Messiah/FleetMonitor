@@ -30,4 +30,4 @@ WORKDIR /app/backend
 RUN pnpm prisma generate --schema=prisma/schema.prisma
 
 EXPOSE 3000
-CMD ["node", "dist/main.js"]
+CMD ["sh", "-c", "pnpm prisma migrate deploy --schema=prisma/schema.prisma && node dist/main.js"]
