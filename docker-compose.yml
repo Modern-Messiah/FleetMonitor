@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: pass
     ports:
-      - "5432:5432"
+      - "15432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -22,7 +22,7 @@ services:
     container_name: fleet-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "16379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -55,7 +55,7 @@ services:
       WEBHOOK_URL: https://webhook.site/your-uuid
       PORT: 3000
     ports:
-      - "3000:3000"
+      - "3030:3000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -87,7 +87,7 @@ services:
     container_name: fleet-frontend
     restart: unless-stopped
     ports:
-      - "8080:80"
+      - "8088:80"
     depends_on:
       backend:
         condition: service_started

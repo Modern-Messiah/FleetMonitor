@@ -107,9 +107,9 @@ docker compose up --build
 
 После старта:
 
-- Frontend: `http://localhost:8080`
-- Backend API: `http://localhost:3000/api`
-- Swagger: `http://localhost:3000/api/docs`
+- **Frontend (UI)**: [http://localhost:8088](http://localhost:8088)
+- **Backend API**: [http://localhost:3030/api](http://localhost:3030/api)
+- **Swagger API Docs**: [http://localhost:3030/api/docs](http://localhost:3030/api/docs)
 - RabbitMQ UI: `http://localhost:15672` (`guest/guest`)
 
 ## Почему WebSocket для фронта, RabbitMQ между simulator и backend
