@@ -6,6 +6,7 @@ import L from 'leaflet';
 import { MapContainer, Marker, Polyline, TileLayer, useMap, ZoomControl } from 'react-leaflet';
 import { useFleetSocket } from '@/hooks/use-fleet-socket';
 import { api } from '@/lib/api';
+import { eventKey, fill, Locale, LocaleSwitch, MessageKey, useI18n } from '@/lib/i18n';
 import { FleetEvent, FleetSnapshotItem, GpsUpdate, Vehicle } from '@/lib/types';
 
 interface LiveVehicle {
@@ -28,40 +29,38 @@ const CENTER: [number, number] = [43.238, 76.945];
 const OFFLINE_AFTER_MS = 15_000;
 const ATTENTION_WINDOW_MS = 5 * 60 * 1000;
 
-const FILTERS: Array<{ key: FilterKey; label: string }> = [
-  { key: 'all', label: 'все' },
-  { key: 'attention', label: 'внимание' },
-  { key: 'online', label: 'в сети' },
-  { key: 'offline', label: 'без связи' },
+const FILTERS: Array<{ key: FilterKey; label: MessageKey }> = [
+  { key: 'all', label: 'filterAll' },
+  { key: 'attention', label: 'filterAttention' },
+  { key: 'online', label: 'filterOnline' },
+  { key: 'offline', label: 'filterOffline' },
 ];
 
-function eventWord(type: FleetEvent['type']) {
-  switch (type) {
-    case 'DROWSINESS':
-      return 'сонливость';
-    case 'SPEEDING':
-      return 'превышение скорости';
-    case 'HARSH_BRAKING':
-      return 'резкое торможение';
-    case 'COLLISION_WARNING':
-      return 'опасность столкновения';
-    default:
-      return type;
-  }
+type Copy = (key: MessageKey) => string;
+
+function eventWord(type: FleetEvent['type'], t: Copy) {
+  const key = eventKey(type);
+  return key ? t(key) : type;
 }
 
-function compass(deg: number) {
-  const dirs = ['С', 'СВ', 'В', 'ЮВ', 'Ю', 'ЮЗ', 'З', 'СЗ'];
+function compass(deg: number, locale: Locale) {
+  const dirs =
+    locale === 'ru'
+      ? ['С', 'СВ', 'В', 'ЮВ', 'Ю', 'ЮЗ', 'З', 'СЗ']
+      : ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
   const index = Math.round((((deg % 360) + 360) % 360) / 45) % 8;
   return dirs[index];
 }
 
-function clock(iso: string) {
+function clock(iso: string, locale: Locale) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) {
     return '';
   }
-  return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleTimeString(locale === 'ru' ? 'ru-RU' : 'en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function prefersReduce() {
@@ -150,31 +149,31 @@ function rankOf(vehicle: LiveVehicle, latest: FleetEvent | undefined, now: numbe
   return 4;
 }
 
-function statusWord(vehicle: LiveVehicle, latest: FleetEvent | undefined) {
+function statusWord(vehicle: LiveVehicle, latest: FleetEvent | undefined, t: Copy) {
   if (latest?.severity === 'CRITICAL') {
-    return 'смотри сейчас';
+    return t('watchNow');
   }
   if (!vehicle.isOnline) {
-    return 'нет связи';
+    return t('noSignal');
   }
   if (vehicle.speed === 0) {
-    return 'стоит';
+    return t('standing');
   }
-  return 'едет';
+  return t('moving');
 }
 
-function eventLine(event: FleetEvent) {
-  const name = event.groupCount > 1 ? `${eventWord(event.type)} ×${event.groupCount}` : eventWord(event.type);
-  const time = clock(event.timestamp);
+function eventLine(event: FleetEvent, t: Copy, locale: Locale) {
+  const name = event.groupCount > 1 ? `${eventWord(event.type, t)} ×${event.groupCount}` : eventWord(event.type, t);
+  const time = clock(event.timestamp, locale);
   return time ? `${name} · ${time}` : name;
 }
 
-function offlineLine(vehicle: LiveVehicle, now: number) {
+function offlineLine(vehicle: LiveVehicle, now: number, t: Copy) {
   if (!vehicle.lastSeenMs) {
-    return 'нет связи';
+    return t('noSignal');
   }
   const mins = Math.max(1, Math.round((now - vehicle.lastSeenMs) / 60_000));
-  return `нет связи · ${mins} мин`;
+  return fill(t('offlineAge'), { mins });
 }
 
 function eventIcon(critical: boolean) {
@@ -209,12 +208,13 @@ function markerIcon(options: {
 }
 
 function EventPlace({ event, onLook }: { event: FleetEvent; onLook: () => void }) {
-  const label = eventLine(event);
+  const { locale, t } = useI18n();
+  const label = eventLine(event, t, locale);
   if (!hasPlace(event)) {
     return <span>{label}</span>;
   }
   return (
-    <button type="button" className="control event-jump" onClick={onLook} aria-label="Показать место события">
+    <button type="button" className="control event-jump" onClick={onLook} aria-label={t('showPlace')}>
       {label}
     </button>
   );
@@ -267,6 +267,7 @@ function InvalidateSize() {
 }
 
 export function MapPage() {
+  const { locale, t } = useI18n();
   const { data: vehicles = [], isLoading, isError } = useQuery({
     queryKey: ['vehicles'],
     queryFn: async () => {
@@ -701,19 +702,19 @@ export function MapPage() {
       </MapContainer>
 
       <header className="bar">
-        <div className="brand">Монитор</div>
+        <div className="brand">{t('brand')}</div>
         <div className="hair" aria-hidden="true" />
         <p className="counts">
           <span>
-            <b>{onlineCount ?? '—'}</b> в сети
+            <b>{onlineCount ?? '—'}</b> {t('onlineCount')}
           </span>
           <span aria-hidden="true">·</span>
           <span>
-            <b>{offlineCount ?? '—'}</b> без связи
+            <b>{offlineCount ?? '—'}</b> {t('offlineCount')}
           </span>
           <span aria-hidden="true">·</span>
           <span>
-            <b>{criticalCount ?? '—'}</b> критических
+            <b>{criticalCount ?? '—'}</b> {t('criticalCount')}
           </span>
         </p>
         <div className="spacer" />
@@ -722,10 +723,10 @@ export function MapPage() {
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="номер или водитель"
-          aria-label="Поиск по номеру или водителю"
+          placeholder={t('searchPlaceholder')}
+          aria-label={t('searchLabel')}
         />
-        <nav className="filters" aria-label="Фильтр">
+        <nav className="filters" aria-label={t('filterLabel')}>
           {FILTERS.map((item) => (
             <button
               key={item.key}
@@ -734,34 +735,36 @@ export function MapPage() {
               aria-pressed={filter === item.key}
               onClick={() => setFilter(item.key)}
             >
-              {item.label}
+              {t(item.label)}
             </button>
           ))}
         </nav>
         <div className="hair" aria-hidden="true" />
-        <nav className="filters links" aria-label="Разделы">
+        <nav className="filters links" aria-label={t('sections')}>
           <Link to="/events" className="control">
-            журнал
+            {t('journal')}
           </Link>
           <Link to="/dashboard" className="control">
-            сводка
+            {t('summary')}
           </Link>
         </nav>
         <div className="hair" aria-hidden="true" />
-        <p className={connected ? 'snap' : 'snap is-down'}>{connected ? 'поток: живой' : 'поток: нет связи'}</p>
+        <LocaleSwitch />
+        <div className="hair" aria-hidden="true" />
+        <p className={connected ? 'snap' : 'snap is-down'}>{connected ? t('streamLive') : t('streamDown')}</p>
       </header>
 
       <div className="caption" hidden={!captionOpen} aria-live="polite">
         {phase === 'error' && (
           <>
-            <p className="who">нет данных</p>
-            <p className="meta">не удалось получить список машин</p>
+            <p className="who">{t('noData')}</p>
+            <p className="meta">{t('listFailed')}</p>
           </>
         )}
         {phase === 'empty' && (
           <>
-            <p className="who">пока нет машин</p>
-            <p className="meta">запустите симулятор, чтобы увидеть поток</p>
+            <p className="who">{t('noVehicles')}</p>
+            <p className="meta">{t('startSimulator')}</p>
           </>
         )}
         {phase === 'ready' && selected && (
@@ -770,11 +773,11 @@ export function MapPage() {
             <p className="platenum">{selected.licensePlate}</p>
             {selected.isOnline ? (
               <p className="meta">
-                <span className="num">{selected.speed} км/ч</span>
-                {Number.isFinite(selected.heading) ? ` · ${compass(selected.heading)}` : ''}
+                <span className="num">{fill(t('speed'), { speed: selected.speed })}</span>
+                {Number.isFinite(selected.heading) ? ` · ${compass(selected.heading, locale)}` : ''}
               </p>
             ) : (
-              <p className="meta">{offlineLine(selected, now)}</p>
+              <p className="meta">{offlineLine(selected, now, t)}</p>
             )}
             {alertEvent && (
               <p className="alert">
@@ -784,7 +787,7 @@ export function MapPage() {
                   className="control dismiss"
                   onClick={() => setDismissed((previous) => ({ ...previous, [alertEvent.id]: true }))}
                 >
-                  скрыть
+                  {t('dismiss')}
                 </button>
               </p>
             )}
@@ -799,10 +802,10 @@ export function MapPage() {
 
       <div className="film">
         <div className="strip" id="strip" ref={stripRef}>
-          {phase === 'loading' && <p className="strip-note">загрузка</p>}
-          {phase === 'error' && <p className="strip-note">не удалось загрузить машины</p>}
-          {phase === 'empty' && <p className="strip-note">пока нет машин</p>}
-          {phase === 'ready' && ordered.length === 0 && <p className="strip-note">ничего по этому фильтру</p>}
+          {phase === 'loading' && <p className="strip-note">{t('loading')}</p>}
+          {phase === 'error' && <p className="strip-note">{t('loadVehiclesFailed')}</p>}
+          {phase === 'empty' && <p className="strip-note">{t('noVehicles')}</p>}
+          {phase === 'ready' && ordered.length === 0 && <p className="strip-note">{t('noFilterMatch')}</p>}
           {phase === 'ready' &&
             ordered.map((vehicle) => {
               const latest = latestEvent(eventsByVehicle[vehicle.id]);
@@ -821,7 +824,7 @@ export function MapPage() {
                     {latest && latest.groupCount > 1 ? <span className="times">×{latest.groupCount}</span> : null}
                   </span>
                   <span className="driver">{vehicle.driverName}</span>
-                  <span className={hot ? 'status is-hot' : 'status'}>{statusWord(vehicle, latest)}</span>
+                  <span className={hot ? 'status is-hot' : 'status'}>{statusWord(vehicle, latest, t)}</span>
                 </button>
               );
             })}

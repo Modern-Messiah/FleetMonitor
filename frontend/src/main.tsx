@@ -6,6 +6,7 @@ import { Toaster } from 'sonner';
 import 'leaflet/dist/leaflet.css';
 import App from './App';
 import { ErrorBoundary } from './components/error-boundary';
+import { I18nProvider } from './lib/i18n';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -20,12 +21,14 @@ const queryClient = new QueryClient({
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <App />
-          <Toaster theme="dark" position="top-right" />
-        </BrowserRouter>
-      </QueryClientProvider>
+      <I18nProvider>
+        <QueryClientProvider client={queryClient}>
+          <BrowserRouter>
+            <App />
+            <Toaster theme="dark" position="top-right" />
+          </BrowserRouter>
+        </QueryClientProvider>
+      </I18nProvider>
     </ErrorBoundary>
   </React.StrictMode>,
 );

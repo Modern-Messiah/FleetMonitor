@@ -4,6 +4,7 @@ import { CalendarDays } from 'lucide-react';
 import { useFleetSocket } from '@/hooks/use-fleet-socket';
 import { API_BASE_URL, api } from '@/lib/api';
 import { formatDateTime } from '@/lib/date';
+import { eventKey, fill, Locale, MessageKey, severityMessage, titleCase, useI18n } from '@/lib/i18n';
 import {
   EventType,
   EventsListResponse,
@@ -47,32 +48,9 @@ const EVENT_TYPES: EventType[] = [
 
 const SEVERITIES: Severity[] = ['LOW', 'MEDIUM', 'CRITICAL'];
 
-function formatEventType(type: EventType) {
-  switch (type) {
-    case 'DROWSINESS':
-      return 'Сонливость';
-    case 'SPEEDING':
-      return 'Превышение скорости';
-    case 'HARSH_BRAKING':
-      return 'Резкое торможение';
-    case 'COLLISION_WARNING':
-      return 'Опасность столкновения';
-    default:
-      return type;
-  }
-}
-
-function formatSeverity(severity: Severity) {
-  switch (severity) {
-    case 'LOW':
-      return 'Низкая';
-    case 'MEDIUM':
-      return 'Средняя';
-    case 'CRITICAL':
-      return 'Критическая';
-    default:
-      return severity;
-  }
+function formatEventType(type: EventType, label: (key: MessageKey) => string, locale: Locale) {
+  const key = eventKey(type);
+  return key ? titleCase(label(key), locale) : type;
 }
 
 function toIsoOrUndefined(value: string) {
@@ -101,7 +79,12 @@ function buildQueryParams(filters: EventsFilters, page: number) {
   };
 }
 
-function normalizeLiveEvent(event: FleetEvent, vehicles: Vehicle[]): EventsItem {
+function normalizeLiveEvent(
+  event: FleetEvent,
+  vehicles: Vehicle[],
+  unknownDriver: string,
+  unknownPlate: string,
+): EventsItem {
   const vehicle = vehicles.find((item) => item.id === event.vehicleId);
 
   return {
@@ -109,8 +92,8 @@ function normalizeLiveEvent(event: FleetEvent, vehicles: Vehicle[]): EventsItem 
     vehicle: {
       id: vehicle?.id || event.vehicleId,
       deviceId: vehicle?.deviceId || 'unknown',
-      driverName: vehicle?.driverName || 'Неизвестный водитель',
-      licensePlate: vehicle?.licensePlate || 'неизвестно',
+      driverName: vehicle?.driverName || unknownDriver,
+      licensePlate: vehicle?.licensePlate || unknownPlate,
     },
   };
 }
@@ -148,6 +131,10 @@ function matchesFilters(event: EventsItem, filters: EventsFilters) {
 }
 
 export function EventsPage() {
+  const { locale, t } = useI18n();
+  const dateLang = locale === 'ru' ? 'ru-RU' : 'en-GB';
+  const unknownDriver = t('unknownDriver');
+  const unknownPlate = t('unknownPlate');
   const dateFromRef = useRef<HTMLInputElement>(null);
   const dateToRef = useRef<HTMLInputElement>(null);
 
@@ -207,13 +194,37 @@ export function EventsPage() {
     setLiveNewCount(0);
   }, [filters, page]);
 
+  useEffect(() => {
+    setLiveItems((previous) => {
+      let changed = false;
+      const next = previous.map((item) => {
+        const vehicle = vehicles.find((entry) => entry.id === item.vehicleId);
+        const driverName = vehicle?.driverName || unknownDriver;
+        const licensePlate = vehicle?.licensePlate || unknownPlate;
+        if (item.vehicle.driverName === driverName && item.vehicle.licensePlate === licensePlate) {
+          return item;
+        }
+        changed = true;
+        return {
+          ...item,
+          vehicle: {
+            ...item.vehicle,
+            driverName,
+            licensePlate,
+          },
+        };
+      });
+      return changed ? next : previous;
+    });
+  }, [unknownDriver, unknownPlate, vehicles]);
+
   useFleetSocket({
     onEventNew: (event) => {
       if (page !== 1) {
         return;
       }
 
-      const normalized = normalizeLiveEvent(event, vehicles);
+      const normalized = normalizeLiveEvent(event, vehicles, unknownDriver, unknownPlate);
       if (!matchesFilters(normalized, filters)) {
         return;
       }
@@ -285,10 +296,8 @@ export function EventsPage() {
   return (
     <div className="space-y-4">
       <Card className="space-y-1">
-        <CardTitle>Журнал</CardTitle>
-        <CardDescription>
-          Фильтрация, поиск, экспорт CSV и получение новых событий в реальном времени.
-        </CardDescription>
+        <CardTitle>{t('journalTitle')}</CardTitle>
+        <CardDescription>{t('journalNote')}</CardDescription>
       </Card>
 
       <Card className="space-y-4">
@@ -298,10 +307,10 @@ export function EventsPage() {
             onValueChange={(value) => updateFilter('vehicleId', value === 'ALL' ? '' : value)}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Все машины" />
+              <SelectValue placeholder={t('allVehicles')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ALL">Все машины</SelectItem>
+              <SelectItem value="ALL">{t('allVehicles')}</SelectItem>
               {vehicles.map((vehicle) => (
                 <SelectItem key={vehicle.id} value={vehicle.id}>
                   {vehicle.driverName} ({vehicle.licensePlate})
@@ -315,13 +324,13 @@ export function EventsPage() {
             onValueChange={(value) => updateFilter('type', value === 'ALL' ? '' : value as EventType)}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Все типы событий" />
+              <SelectValue placeholder={t('allTypes')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ALL">Все типы событий</SelectItem>
+              <SelectItem value="ALL">{t('allTypes')}</SelectItem>
               {EVENT_TYPES.map((type) => (
                 <SelectItem key={type} value={type}>
-                  {formatEventType(type)}
+                  {formatEventType(type, t, locale)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -332,13 +341,13 @@ export function EventsPage() {
             onValueChange={(value) => updateFilter('severity', value === 'ALL' ? '' : value as Severity)}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Все уровни" />
+              <SelectValue placeholder={t('allLevels')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ALL">Все уровни</SelectItem>
+              <SelectItem value="ALL">{t('allLevels')}</SelectItem>
               {SEVERITIES.map((severity) => (
                 <SelectItem key={severity} value={severity}>
-                  {formatSeverity(severity)}
+                  {t(severityMessage(severity))}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -348,15 +357,16 @@ export function EventsPage() {
             <Input
               ref={dateFromRef}
               type="datetime-local"
-              lang="ru-RU"
+              lang={dateLang}
               value={filters.dateFrom}
               onChange={(event) => updateFilter('dateFrom', event.target.value)}
-              placeholder="Дата от"
+              placeholder={t('dateFrom')}
+              aria-label={t('dateFrom')}
               className="pr-9 [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0"
             />
             <button
               type="button"
-              aria-label="Открыть календарь (дата от)"
+              aria-label={t('openDateFrom')}
               onClick={() => openDatePicker(dateFromRef.current)}
               className="absolute right-2 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded text-muted-foreground hover:text-foreground"
             >
@@ -367,15 +377,16 @@ export function EventsPage() {
             <Input
               ref={dateToRef}
               type="datetime-local"
-              lang="ru-RU"
+              lang={dateLang}
               value={filters.dateTo}
               onChange={(event) => updateFilter('dateTo', event.target.value)}
-              placeholder="Дата до"
+              placeholder={t('dateTo')}
+              aria-label={t('dateTo')}
               className="pr-9 [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0"
             />
             <button
               type="button"
-              aria-label="Открыть календарь (дата до)"
+              aria-label={t('openDateTo')}
               onClick={() => openDatePicker(dateToRef.current)}
               className="absolute right-2 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded text-muted-foreground hover:text-foreground"
             >
@@ -385,18 +396,19 @@ export function EventsPage() {
           <Input
             value={filters.search}
             onChange={(event) => updateFilter('search', event.target.value)}
-            placeholder="Водитель или номер"
+            placeholder={t('searchDriver')}
+            aria-label={t('searchDriver')}
           />
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm text-muted-foreground">
             {eventsQuery.isError
-              ? 'Журнал не загрузился'
-              : `Всего: ${(eventsQuery.data?.total ?? 0) + liveNewCount} событий`}
+              ? t('journalFailedShort')
+              : fill(t('eventTotal'), { count: (eventsQuery.data?.total ?? 0) + liveNewCount })}
           </p>
           <Button variant="outline" onClick={exportCsv}>
-            Экспорт CSV
+            {t('exportCsv')}
           </Button>
         </div>
 
@@ -408,19 +420,19 @@ export function EventsPage() {
           </div>
         ) : eventsQuery.isError ? (
           <div className="border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-            Не удалось загрузить журнал.
+            {t('journalFailed')}
           </div>
         ) : items.length ? (
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Время</TableHead>
-                  <TableHead>Машина</TableHead>
-                  <TableHead>Водитель</TableHead>
-                  <TableHead>Тип</TableHead>
-                  <TableHead>Уровень</TableHead>
-                  <TableHead>Координаты</TableHead>
+                  <TableHead>{t('time')}</TableHead>
+                  <TableHead>{t('vehicle')}</TableHead>
+                  <TableHead>{t('driver')}</TableHead>
+                  <TableHead>{t('type')}</TableHead>
+                  <TableHead>{t('level')}</TableHead>
+                  <TableHead>{t('coordinates')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -431,7 +443,7 @@ export function EventsPage() {
                     <TableCell>{item.vehicle.driverName}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <span>{formatEventType(item.type)}</span>
+                        <span>{formatEventType(item.type, t, locale)}</span>
                         {item.groupCount > 1 && <Badge variant="outline">×{item.groupCount}</Badge>}
                       </div>
                     </TableCell>
@@ -448,7 +460,7 @@ export function EventsPage() {
           </div>
         ) : (
           <div className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-            По выбранным фильтрам события не найдены.
+            {t('noEvents')}
           </div>
         )}
 
@@ -458,17 +470,17 @@ export function EventsPage() {
             disabled={page <= 1}
             onClick={() => setPage((current) => Math.max(current - 1, 1))}
           >
-            Назад
+            {t('back')}
           </Button>
           <p className="min-w-24 text-center text-sm text-muted-foreground">
-            Страница {page} / {totalPages}
+            {fill(t('page'), { page, total: totalPages })}
           </p>
           <Button
             variant="outline"
             disabled={page >= totalPages}
             onClick={() => setPage((current) => Math.min(current + 1, totalPages))}
           >
-            Вперед
+            {t('forward')}
           </Button>
         </div>
       </Card>

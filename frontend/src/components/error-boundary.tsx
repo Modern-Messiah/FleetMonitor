@@ -1,4 +1,5 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
+import { messages, readLocale } from '@/lib/i18n';
 import { Button } from './ui/button';
 import { Card, CardDescription, CardTitle } from './ui/card';
 
@@ -28,14 +29,14 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       return this.props.children;
     }
 
+    const copy = messages[readLocale()];
+
     return (
       <div className="mx-auto flex min-h-screen max-w-lg items-center px-4">
         <Card className="w-full space-y-3 p-6 text-center">
-          <CardTitle>Что-то пошло не так</CardTitle>
-          <CardDescription>
-            Во время отображения страницы произошла непредвиденная ошибка.
-          </CardDescription>
-          <Button onClick={() => window.location.reload()}>Перезагрузить</Button>
+          <CardTitle>{copy.errorTitle}</CardTitle>
+          <CardDescription>{copy.errorNote}</CardDescription>
+          <Button onClick={() => window.location.reload()}>{copy.reload}</Button>
         </Card>
       </div>
     );

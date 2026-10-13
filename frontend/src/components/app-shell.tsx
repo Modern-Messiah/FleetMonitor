@@ -1,26 +1,31 @@
 import { NavLink, Outlet } from 'react-router-dom';
+import { LocaleSwitch, MessageKey, useI18n } from '@/lib/i18n';
 
-const navItems = [
-  { to: '/map', label: 'карта' },
-  { to: '/events', label: 'журнал' },
-  { to: '/dashboard', label: 'сводка' },
+const navItems: Array<{ to: string; label: MessageKey }> = [
+  { to: '/map', label: 'map' },
+  { to: '/events', label: 'journal' },
+  { to: '/dashboard', label: 'summary' },
 ];
 
 export function AppShell() {
+  const { t } = useI18n();
+
   return (
     <div className="min-h-screen">
       <header className="chrome">
         <NavLink to="/map" className="brand">
-          Монитор
+          {t('brand')}
         </NavLink>
         <div className="hair" aria-hidden="true" />
-        <nav className="filters" aria-label="Разделы">
+        <nav className="filters" aria-label={t('sections')}>
           {navItems.map((item) => (
             <NavLink key={item.to} to={item.to} className="control">
-              {item.label}
+              {t(item.label)}
             </NavLink>
           ))}
         </nav>
+        <div className="spacer" />
+        <LocaleSwitch />
       </header>
       <main className="mx-auto max-w-7xl px-4 py-6">
         <Outlet />

@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/table';
 import { api } from '@/lib/api';
 import { formatDateTime } from '@/lib/date';
+import { eventKey, Locale, MessageKey, titleCase, useI18n } from '@/lib/i18n';
 import { EventsListResponse, Vehicle } from '@/lib/types';
 
 interface DashboardData {
@@ -33,19 +34,13 @@ interface DashboardData {
   topVehicles: Array<{ name: string; count: number }>;
 }
 
-function formatEventType(type: EventsListResponse['items'][number]['type']) {
-  switch (type) {
-    case 'DROWSINESS':
-      return 'Сонливость';
-    case 'SPEEDING':
-      return 'Превышение скорости';
-    case 'HARSH_BRAKING':
-      return 'Резкое торможение';
-    case 'COLLISION_WARNING':
-      return 'Опасность столкновения';
-    default:
-      return type;
-  }
+function formatEventType(
+  type: EventsListResponse['items'][number]['type'],
+  label: (key: MessageKey) => string,
+  locale: Locale,
+) {
+  const key = eventKey(type);
+  return key ? titleCase(label(key), locale) : type;
 }
 
 async function fetchEventsTotal(dateFromIso: string) {
@@ -125,6 +120,7 @@ function StatCard({ title, value, note }: { title: string; value: number; note: 
 }
 
 export function DashboardPage() {
+  const { locale, t } = useI18n();
   const dashboardQuery = useQuery({
     queryKey: ['dashboard'],
     queryFn: fetchDashboardData,
@@ -148,8 +144,8 @@ export function DashboardPage() {
   if (dashboardQuery.isError || !data) {
     return (
       <Card className="space-y-2 p-5">
-        <CardTitle>Не удалось загрузить сводку</CardTitle>
-        <CardDescription>Не получилось получить аналитику с backend API.</CardDescription>
+        <CardTitle>{t('summaryFailed')}</CardTitle>
+        <CardDescription>{t('summaryFailedNote')}</CardDescription>
       </Card>
     );
   }
@@ -157,19 +153,19 @@ export function DashboardPage() {
   return (
     <div className="space-y-4">
       <Card className="space-y-1">
-        <CardTitle>Сводка</CardTitle>
-        <CardDescription>Аналитика автоматически обновляется каждые 30 секунд.</CardDescription>
+        <CardTitle>{t('summaryTitle')}</CardTitle>
+        <CardDescription>{t('summaryNote')}</CardDescription>
       </Card>
 
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="В сети" value={data.onlineVehicles} note="Живое состояние" />
-        <StatCard title="Без связи" value={data.offlineVehicles} note="Нет свежего GPS" />
-        <StatCard title="За час" value={data.eventsLastHour} note="Последние 60 минут" />
-        <StatCard title="За сутки" value={data.eventsLastDay} note="Последние 24 часа" />
+        <StatCard title={t('statOnline')} value={data.onlineVehicles} note={t('statOnlineNote')} />
+        <StatCard title={t('statOffline')} value={data.offlineVehicles} note={t('statOfflineNote')} />
+        <StatCard title={t('statHour')} value={data.eventsLastHour} note={t('statHourNote')} />
+        <StatCard title={t('statDay')} value={data.eventsLastDay} note={t('statDayNote')} />
       </div>
 
       <Card className="space-y-3">
-        <CardTitle>Топ-5 машин по числу событий</CardTitle>
+        <CardTitle>{t('topTitle')}</CardTitle>
         <div className="h-[320px] w-full">
           {chartData.length ? (
             <ResponsiveContainer width="100%" height="100%">
@@ -200,29 +196,29 @@ export function DashboardPage() {
                   labelStyle={{ color: '#f5f5f5' }}
                   itemStyle={{ color: '#f5f5f5' }}
                 />
-                <Bar dataKey="count" name="Событий" fill="#c4543c" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="count" name={t('eventSeries')} fill="#c4543c" radius={[0, 0, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              Пока недостаточно данных по событиям.
+              {t('notEnoughEvents')}
             </div>
           )}
         </div>
       </Card>
 
       <Card className="space-y-3">
-        <CardTitle>Критические события за 24 часа</CardTitle>
+        <CardTitle>{t('criticalDay')}</CardTitle>
         {data.criticalEvents.length ? (
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Время</TableHead>
-                  <TableHead>Водитель</TableHead>
-                  <TableHead>Машина</TableHead>
-                  <TableHead>Тип</TableHead>
-                  <TableHead>Уровень</TableHead>
+                  <TableHead>{t('time')}</TableHead>
+                  <TableHead>{t('driver')}</TableHead>
+                  <TableHead>{t('vehicle')}</TableHead>
+                  <TableHead>{t('type')}</TableHead>
+                  <TableHead>{t('level')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -231,7 +227,7 @@ export function DashboardPage() {
                     <TableCell>{formatDateTime(event.timestamp)}</TableCell>
                     <TableCell>{event.vehicle.driverName}</TableCell>
                     <TableCell>{event.vehicle.licensePlate}</TableCell>
-                    <TableCell>{formatEventType(event.type)}</TableCell>
+                    <TableCell>{formatEventType(event.type, t, locale)}</TableCell>
                     <TableCell>
                       <SeverityBadge severity={event.severity} />
                     </TableCell>
@@ -242,7 +238,7 @@ export function DashboardPage() {
           </div>
         ) : (
           <div className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-            За последние 24 часа критических событий не было.
+            {t('noCriticalDay')}
           </div>
         )}
       </Card>
