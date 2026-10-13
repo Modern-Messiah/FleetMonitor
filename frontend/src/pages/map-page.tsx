@@ -1,16 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import throttle from 'lodash.throttle';
 import L from 'leaflet';
-import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
-import { toast } from 'sonner';
+import { MapContainer, Marker, Polyline, TileLayer, useMap, ZoomControl } from 'react-leaflet';
 import { useFleetSocket } from '@/hooks/use-fleet-socket';
 import { api } from '@/lib/api';
-import { formatDateTime } from '@/lib/date';
 import { FleetEvent, FleetSnapshotItem, GpsUpdate, Vehicle } from '@/lib/types';
-import { SeverityBadge } from '@/components/severity-badge';
-import { Card, CardDescription, CardTitle } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
 
 interface LiveVehicle {
   id: string;
@@ -26,31 +22,74 @@ interface LiveVehicle {
   lastSeenMs: number;
 }
 
-const center: [number, number] = [43.238, 76.945];
+type FilterKey = 'all' | 'attention' | 'online' | 'offline';
 
-function formatEventType(type: FleetEvent['type']) {
+const CENTER: [number, number] = [43.238, 76.945];
+const OFFLINE_AFTER_MS = 15_000;
+const ATTENTION_WINDOW_MS = 5 * 60 * 1000;
+
+const FILTERS: Array<{ key: FilterKey; label: string }> = [
+  { key: 'all', label: 'все' },
+  { key: 'attention', label: 'внимание' },
+  { key: 'online', label: 'в сети' },
+  { key: 'offline', label: 'без связи' },
+];
+
+function eventWord(type: FleetEvent['type']) {
   switch (type) {
     case 'DROWSINESS':
-      return 'Сонливость';
+      return 'сонливость';
     case 'SPEEDING':
-      return 'Превышение скорости';
+      return 'превышение скорости';
     case 'HARSH_BRAKING':
-      return 'Резкое торможение';
+      return 'резкое торможение';
     case 'COLLISION_WARNING':
-      return 'Опасность столкновения';
+      return 'опасность столкновения';
     default:
       return type;
   }
 }
 
-function onlineIcon(isOnline: boolean) {
-  const color = isOnline ? '#2563eb' : '#64748b';
-  return L.divIcon({
-    className: '',
-    html: `<span style="display:block;width:14px;height:14px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.25)"></span>`,
-    iconSize: [14, 14],
-    iconAnchor: [7, 7],
-  });
+function compass(deg: number) {
+  const dirs = ['С', 'СВ', 'В', 'ЮВ', 'Ю', 'ЮЗ', 'З', 'СЗ'];
+  const index = Math.round((((deg % 360) + 360) % 360) / 45) % 8;
+  return dirs[index];
+}
+
+function clock(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+  return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+}
+
+function prefersReduce() {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function asLiveVehicle(vehicle: Vehicle): LiveVehicle {
+  return {
+    id: vehicle.id,
+    deviceId: vehicle.deviceId,
+    driverName: vehicle.driverName,
+    licensePlate: vehicle.licensePlate,
+    lat: vehicle.state?.lat ?? null,
+    lng: vehicle.state?.lng ?? null,
+    speed: vehicle.state?.speed ?? 0,
+    heading: vehicle.state?.heading ?? 0,
+    timestamp: vehicle.state?.timestamp ?? null,
+    isOnline: vehicle.isOnline,
+    lastSeenMs: seenAt(vehicle.state?.timestamp ?? vehicle.lastSeenAt),
+  };
+}
+
+function seenAt(value: string | null | undefined) {
+  if (!value) {
+    return 0;
+  }
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function applyGpsUpdate(current: LiveVehicle, update: GpsUpdate): LiveVehicle {
@@ -83,20 +122,148 @@ function applySnapshot(current: LiveVehicle, snapshot: FleetSnapshotItem): LiveV
   };
 }
 
-function asLiveVehicle(vehicle: Vehicle): LiveVehicle {
-  return {
-    id: vehicle.id,
-    deviceId: vehicle.deviceId,
-    driverName: vehicle.driverName,
-    licensePlate: vehicle.licensePlate,
-    lat: vehicle.state?.lat ?? null,
-    lng: vehicle.state?.lng ?? null,
-    speed: vehicle.state?.speed ?? 0,
-    heading: vehicle.state?.heading ?? 0,
-    timestamp: vehicle.state?.timestamp ?? null,
-    isOnline: Boolean(vehicle.state),
-    lastSeenMs: vehicle.state ? Date.parse(vehicle.state.timestamp) : 0,
-  };
+function latestEvent(events: FleetEvent[] | undefined) {
+  return events && events.length ? events[0] : undefined;
+}
+
+function isRecentOffline(vehicle: LiveVehicle, now: number) {
+  return !vehicle.isOnline && vehicle.lastSeenMs > 0 && now - vehicle.lastSeenMs <= ATTENTION_WINDOW_MS;
+}
+
+function isAttention(vehicle: LiveVehicle, latest: FleetEvent | undefined, now: number) {
+  return latest?.severity === 'CRITICAL' || isRecentOffline(vehicle, now);
+}
+
+function rankOf(vehicle: LiveVehicle, latest: FleetEvent | undefined, now: number) {
+  if (latest?.severity === 'CRITICAL') {
+    return 0;
+  }
+  if (isRecentOffline(vehicle, now)) {
+    return 1;
+  }
+  if (vehicle.isOnline && vehicle.speed > 0) {
+    return 2;
+  }
+  if (vehicle.isOnline) {
+    return 3;
+  }
+  return 4;
+}
+
+function statusWord(vehicle: LiveVehicle, latest: FleetEvent | undefined) {
+  if (latest?.severity === 'CRITICAL') {
+    return 'смотри сейчас';
+  }
+  if (!vehicle.isOnline) {
+    return 'нет связи';
+  }
+  if (vehicle.speed === 0) {
+    return 'стоит';
+  }
+  return 'едет';
+}
+
+function eventLine(event: FleetEvent) {
+  const name = event.groupCount > 1 ? `${eventWord(event.type)} ×${event.groupCount}` : eventWord(event.type);
+  const time = clock(event.timestamp);
+  return time ? `${name} · ${time}` : name;
+}
+
+function offlineLine(vehicle: LiveVehicle, now: number) {
+  if (!vehicle.lastSeenMs) {
+    return 'нет связи';
+  }
+  const mins = Math.max(1, Math.round((now - vehicle.lastSeenMs) / 60_000));
+  return `нет связи · ${mins} мин`;
+}
+
+function eventIcon(critical: boolean) {
+  return L.divIcon({
+    className: critical ? 'mark is-crit' : 'mark',
+    html: '<span class="mark-ring"><i></i></span>',
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+  });
+}
+
+function hasPlace(event: FleetEvent | undefined): event is FleetEvent {
+  return event != null && Number.isFinite(event.lat) && Number.isFinite(event.lng);
+}
+
+function markerIcon(options: {
+  critical: boolean;
+  offline: boolean;
+  selected: boolean;
+  heading: number | null;
+}) {
+  const kind = options.critical ? ' is-crit' : options.offline ? ' is-off' : '';
+  const selected = options.selected ? ' is-sel' : '';
+  const rotation = options.heading == null ? '' : ` style="transform:rotate(${options.heading}deg)"`;
+  const tick = options.heading == null ? '' : '<i class="tick"></i>';
+  return L.divIcon({
+    className: `pin${kind}${selected}`,
+    html: `<span class="pin-rot"${rotation}>${tick}<b class="dot"></b></span>`,
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
+  });
+}
+
+function EventPlace({ event, onLook }: { event: FleetEvent; onLook: () => void }) {
+  const label = eventLine(event);
+  if (!hasPlace(event)) {
+    return <span>{label}</span>;
+  }
+  return (
+    <button type="button" className="control event-jump" onClick={onLook} aria-label="Показать место события">
+      {label}
+    </button>
+  );
+}
+
+function revealPlate(strip: HTMLElement, id: string, smooth: boolean) {
+  const plate = strip.querySelector<HTMLElement>(`[data-id="${CSS.escape(id)}"]`);
+  if (!plate) {
+    return;
+  }
+  const pad = 16;
+  const stripRect = strip.getBoundingClientRect();
+  const plateRect = plate.getBoundingClientRect();
+  let delta = 0;
+  if (plateRect.left < stripRect.left + pad) {
+    delta = plateRect.left - stripRect.left - pad;
+  } else if (plateRect.right > stripRect.right - pad) {
+    delta = plateRect.right - stripRect.right + pad;
+  }
+  if (delta === 0) {
+    return;
+  }
+  strip.scrollTo({ left: strip.scrollLeft + delta, behavior: smooth ? 'smooth' : 'auto' });
+}
+
+function PanOnSelect({ token, target }: { token: number; target: [number, number] | null }) {
+  const map = useMap();
+  const seen = useRef(0);
+
+  useEffect(() => {
+    if (!target || token === 0 || token === seen.current) {
+      return;
+    }
+    seen.current = token;
+    map.panTo(target, { animate: !prefersReduce(), duration: 0.45 });
+  }, [map, target, token]);
+
+  return null;
+}
+
+function InvalidateSize() {
+  const map = useMap();
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => map.invalidateSize());
+    return () => cancelAnimationFrame(frame);
+  }, [map]);
+
+  return null;
 }
 
 export function MapPage() {
@@ -104,16 +271,38 @@ export function MapPage() {
     queryKey: ['vehicles'],
     queryFn: async () => {
       const response = await api.get<Vehicle[]>('/vehicles');
+      if (!Array.isArray(response.data)) {
+        throw new Error('Список машин не получен');
+      }
       return response.data;
     },
   });
 
   const [liveVehicles, setLiveVehicles] = useState<Record<string, LiveVehicle>>({});
   const [eventsByVehicle, setEventsByVehicle] = useState<Record<string, FleetEvent[]>>({});
-  const throttledUpdates = useRef<Record<string, (update: GpsUpdate) => void>>({});
+  const [connected, setConnected] = useState(false);
+  const [filter, setFilter] = useState<FilterKey>('all');
+  const [query, setQuery] = useState('');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [glance, setGlance] = useState<'car' | 'event'>('car');
+  const [panToken, setPanToken] = useState(0);
+  const [dismissed, setDismissed] = useState<Record<string, true>>({});
+  const [now, setNow] = useState(() => Date.now());
+  const throttledUpdates = useRef<Record<string, { (payload: GpsUpdate): void; cancel(): void }>>({});
+  const stripRef = useRef<HTMLDivElement>(null);
+  const revealSmooth = useRef(false);
+  const userCleared = useRef(false);
+  const didAuto = useRef(false);
 
   useEffect(() => {
-    if (!vehicles.length) {
+    const slots = throttledUpdates.current;
+    return () => {
+      Object.values(slots).forEach((fn) => fn.cancel());
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!Array.isArray(vehicles) || !vehicles.length) {
       return;
     }
 
@@ -130,28 +319,28 @@ export function MapPage() {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      const now = Date.now();
+      const tick = Date.now();
+      setNow(tick);
       setLiveVehicles((previous) => {
+        let changed = false;
         const next = { ...previous };
         Object.keys(next).forEach((vehicleId) => {
           const vehicle = next[vehicleId];
-          if (vehicle.isOnline && now - vehicle.lastSeenMs > 15_000) {
-            next[vehicleId] = {
-              ...vehicle,
-              isOnline: false,
-            };
+          if (vehicle.isOnline && tick - vehicle.lastSeenMs > OFFLINE_AFTER_MS) {
+            next[vehicleId] = { ...vehicle, isOnline: false };
+            changed = true;
           }
         });
-        return next;
+        return changed ? next : previous;
       });
     }, 5000);
 
-    return () => {
-      clearInterval(timer);
-    };
+    return () => clearInterval(timer);
   }, []);
 
   useFleetSocket({
+    onConnected: () => setConnected(true),
+    onDisconnected: () => setConnected(false),
     onGpsUpdate: (update) => {
       const runUpdate =
         throttledUpdates.current[update.vehicleId] ||
@@ -193,6 +382,9 @@ export function MapPage() {
       });
     },
     onFleetSnapshot: (snapshot) => {
+      if (!Array.isArray(snapshot)) {
+        return;
+      }
       setLiveVehicles((previous) => {
         const next = { ...previous };
         snapshot.forEach((item) => {
@@ -213,24 +405,23 @@ export function MapPage() {
             };
             return;
           }
-
           next[item.vehicleId] = applySnapshot(current, item);
         });
-
         return next;
       });
     },
     onEventsHistory: (history) => {
+      if (!Array.isArray(history)) {
+        return;
+      }
       setEventsByVehicle((previous) => {
         const next = { ...previous };
-
         history.forEach((event) => {
           const items = next[event.vehicleId] || [];
           next[event.vehicleId] = [...items, event]
             .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
             .slice(0, 20);
         });
-
         return next;
       });
     },
@@ -240,121 +431,402 @@ export function MapPage() {
         return {
           ...previous,
           [event.vehicleId]: [event, ...items]
-            .filter((item, index, array) => index === array.findIndex((x) => x.id === item.id))
+            .filter((item, index, array) => index === array.findIndex((entry) => entry.id === item.id))
             .slice(0, 20),
         };
       });
-
-      if (event.severity === 'CRITICAL') {
-        const vehicle = liveVehicles[event.vehicleId];
-        toast.custom(
-          () => (
-            <div className="rounded-lg border border-red-200 bg-white px-3 py-2 shadow-lg">
-              <p className="text-sm font-semibold text-red-700">
-                {vehicle?.driverName || 'Неизвестный водитель'} · {formatEventType(event.type)}
-              </p>
-              <div className="mt-1">
-                <SeverityBadge severity={event.severity} />
-              </div>
-            </div>
-          ),
-          { duration: 5000 },
-        );
-      }
     },
   });
 
-  const markers = useMemo(
-    () => Object.values(liveVehicles).filter((vehicle) => vehicle.lat !== null && vehicle.lng !== null),
-    [liveVehicles],
+  const roster = useMemo(() => {
+    const map = new Map<string, LiveVehicle>();
+    const list = Array.isArray(vehicles) ? vehicles : [];
+    list.forEach((vehicle) => {
+      map.set(vehicle.id, asLiveVehicle(vehicle));
+    });
+    Object.values(liveVehicles).forEach((vehicle) => {
+      map.set(vehicle.id, vehicle);
+    });
+    return Array.from(map.values());
+  }, [vehicles, liveVehicles]);
+
+  const phase = roster.length > 0 ? 'ready' : isLoading ? 'loading' : isError ? 'error' : 'empty';
+
+  const ordered = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return roster
+      .filter((vehicle) => {
+        const latest = latestEvent(eventsByVehicle[vehicle.id]);
+        if (filter === 'attention' && !isAttention(vehicle, latest, now)) {
+          return false;
+        }
+        if (filter === 'online' && !vehicle.isOnline) {
+          return false;
+        }
+        if (filter === 'offline' && vehicle.isOnline) {
+          return false;
+        }
+        if (!needle) {
+          return true;
+        }
+        return `${vehicle.licensePlate} ${vehicle.driverName}`.toLowerCase().includes(needle);
+      })
+      .sort((a, b) => {
+        const latestA = latestEvent(eventsByVehicle[a.id]);
+        const latestB = latestEvent(eventsByVehicle[b.id]);
+        const rankA = rankOf(a, latestA, now);
+        const rankB = rankOf(b, latestB, now);
+        if (rankA !== rankB) {
+          return rankA - rankB;
+        }
+        if (rankA === 0) {
+          return Date.parse(latestB?.timestamp || '') - Date.parse(latestA?.timestamp || '');
+        }
+        if (rankA === 1) {
+          return b.lastSeenMs - a.lastSeenMs;
+        }
+        return a.licensePlate.localeCompare(b.licensePlate, 'ru');
+      });
+  }, [roster, eventsByVehicle, filter, query, now]);
+
+  const visibleKey = ordered.map((vehicle) => vehicle.id).join('|');
+  const autoId =
+    ordered.find((vehicle) => latestEvent(eventsByVehicle[vehicle.id])?.severity === 'CRITICAL')?.id ??
+    null;
+
+  useEffect(() => {
+    if (userCleared.current || didAuto.current || selectedId || !autoId) {
+      if (selectedId && !didAuto.current) {
+        didAuto.current = true;
+      }
+      return;
+    }
+    const event = latestEvent(eventsByVehicle[autoId]);
+    didAuto.current = true;
+    setGlance(hasPlace(event) ? 'event' : 'car');
+    setSelectedId(autoId);
+    setPanToken((token) => token + 1);
+  }, [autoId, selectedId, eventsByVehicle]);
+
+  useEffect(() => {
+    if (!selectedId) {
+      return;
+    }
+    if (!ordered.some((vehicle) => vehicle.id === selectedId)) {
+      setSelectedId(null);
+    }
+  }, [ordered, selectedId]);
+
+  useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip) {
+      return;
+    }
+    if (!selectedId) {
+      strip.scrollLeft = 0;
+      return;
+    }
+    const smooth = revealSmooth.current && !prefersReduce();
+    revealSmooth.current = false;
+    revealPlate(strip, selectedId, smooth);
+  }, [selectedId, visibleKey, panToken]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') {
+        return;
+      }
+      if (event.target instanceof HTMLInputElement && event.target.value) {
+        return;
+      }
+      userCleared.current = true;
+      setSelectedId(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const choose = (id: string) => {
+    revealSmooth.current = true;
+    setGlance('car');
+    setSelectedId(id);
+    setPanToken((token) => token + 1);
+  };
+
+  const selected = roster.find((vehicle) => vehicle.id === selectedId) ?? null;
+  const selectedEvent = selected ? latestEvent(eventsByVehicle[selected.id]) : undefined;
+  const eventHere: [number, number] | null = hasPlace(selectedEvent)
+    ? [selectedEvent.lat, selectedEvent.lng]
+    : null;
+  const carHere: [number, number] | null =
+    selected && selected.lat != null && selected.lng != null ? [selected.lat, selected.lng] : null;
+  const panTarget = glance === 'event' && eventHere ? eventHere : carHere;
+
+  const lookAtEvent = () => {
+    if (!eventHere) {
+      return;
+    }
+    setGlance('event');
+    setPanToken((token) => token + 1);
+  };
+
+  const trailQuery = useQuery({
+    queryKey: ['vehicle-trail', selectedId],
+    enabled: Boolean(selectedId),
+    refetchInterval: 5000,
+    queryFn: async ({ queryKey }) => {
+      const id = queryKey[1];
+      const response = await api.get<{ gpsPoints?: unknown }>(`/vehicles/${id}`);
+      const points = response.data?.gpsPoints;
+      if (!Array.isArray(points)) {
+        throw new Error('След не получен');
+      }
+      return points.flatMap((point) => {
+        if (!point || typeof point !== 'object') {
+          return [];
+        }
+        const fix = point as { lat?: unknown; lng?: unknown };
+        if (typeof fix.lat !== 'number' || typeof fix.lng !== 'number') {
+          return [];
+        }
+        return [[fix.lat, fix.lng] as [number, number]];
+      });
+    },
+  });
+
+  const trail = useMemo(() => {
+    const line = trailQuery.data ? [...trailQuery.data].reverse() : [];
+    if (selected?.lat != null && selected.lng != null) {
+      const last = line[line.length - 1];
+      if (!last || last[0] !== selected.lat || last[1] !== selected.lng) {
+        line.push([selected.lat, selected.lng]);
+      }
+    }
+    const unique: Array<[number, number]> = [];
+    line.forEach((point) => {
+      const prev = unique[unique.length - 1];
+      if (prev && prev[0] === point[0] && prev[1] === point[1]) {
+        return;
+      }
+      unique.push(point);
+    });
+    return unique.length >= 2 ? unique : [];
+  }, [trailQuery.data, selected]);
+
+  const placeIcon = useMemo(
+    () => (selectedEvent ? eventIcon(selectedEvent.severity === 'CRITICAL') : null),
+    [selectedEvent],
   );
 
-  if (isLoading) {
-    return (
-      <Card className="space-y-4 p-4">
-        <Skeleton className="h-7 w-48" />
-        <Skeleton className="h-[520px] w-full" />
-      </Card>
-    );
-  }
+  const icons = useMemo(() => {
+    const next: Record<string, L.DivIcon> = {};
+    roster.forEach((vehicle) => {
+      const latest = latestEvent(eventsByVehicle[vehicle.id]);
+      next[vehicle.id] = markerIcon({
+        critical: latest?.severity === 'CRITICAL',
+        offline: !vehicle.isOnline,
+        selected: vehicle.id === selectedId,
+        heading: vehicle.isOnline && Number.isFinite(vehicle.heading) ? vehicle.heading : null,
+      });
+    });
+    return next;
+  }, [roster, eventsByVehicle, selectedId]);
 
-  if (isError) {
-    return (
-      <Card className="space-y-2 p-5">
-        <CardTitle>Не удалось загрузить данные карты</CardTitle>
-        <CardDescription>Не получилось получить список машин с backend API.</CardDescription>
-      </Card>
-    );
-  }
+  const showCounts = phase === 'ready' || phase === 'empty';
+  const onlineCount = showCounts ? roster.filter((vehicle) => vehicle.isOnline).length : null;
+  const offlineCount = showCounts ? roster.length - (onlineCount ?? 0) : null;
+  const criticalCount = showCounts
+    ? roster.filter((vehicle) => latestEvent(eventsByVehicle[vehicle.id])?.severity === 'CRITICAL').length
+    : null;
 
-  if (!vehicles.length) {
-    return (
-      <Card className="space-y-2 p-5">
-        <CardTitle>Пока нет машин</CardTitle>
-        <CardDescription>Запустите симулятор, чтобы увидеть маркеры на карте в реальном времени.</CardDescription>
-      </Card>
-    );
-  }
+  const captionOpen = phase === 'error' || phase === 'empty' || Boolean(selected);
+  const alertEvent =
+    selectedEvent && selectedEvent.severity === 'CRITICAL' && !dismissed[selectedEvent.id]
+      ? selectedEvent
+      : null;
 
   return (
-    <div className="space-y-4">
-      <Card className="space-y-1">
-        <CardTitle>Живая карта автопарка</CardTitle>
-        <CardDescription>
-          Поток GPS в реальном времени, snapshot при reconnect и история событий за последний час.
-        </CardDescription>
-      </Card>
-
-      <Card className="h-[74vh] min-h-[460px] overflow-hidden p-2 md:h-[78vh]">
-        <MapContainer center={center} zoom={12} scrollWheelZoom className="h-full w-full">
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-
-          {markers.map((vehicle) => (
+    <div className="monitor">
+      <MapContainer
+        center={CENTER}
+        zoom={13}
+        minZoom={11}
+        maxZoom={18}
+        zoomControl={false}
+        scrollWheelZoom
+        className="map-stage"
+      >
+        <TileLayer
+          attribution="Tiles &copy; Esri"
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
+          maxZoom={20}
+          detectRetina={false}
+        />
+        <ZoomControl position="topright" />
+        <InvalidateSize />
+        <PanOnSelect token={panToken} target={panTarget} />
+        {trail.length >= 2 && (
+          <>
+            <Polyline
+              positions={trail}
+              pathOptions={{ color: '#f4f1ea', weight: 5, opacity: 0.95, interactive: false }}
+            />
+            <Polyline
+              positions={trail}
+              pathOptions={{ color: '#0a0a0a', weight: 2, opacity: 0.9, interactive: false }}
+            />
+          </>
+        )}
+        {eventHere && placeIcon && (
+          <Marker position={eventHere} icon={placeIcon} zIndexOffset={40} keyboard={false} interactive={false} />
+        )}
+        {ordered.map((vehicle) => {
+          if (vehicle.lat == null || vehicle.lng == null) {
+            return null;
+          }
+          const latest = latestEvent(eventsByVehicle[vehicle.id]);
+          const critical = latest?.severity === 'CRITICAL';
+          const z = (critical ? 400 : vehicle.isOnline ? 200 : 0) + (vehicle.id === selectedId ? 400 : 0);
+          return (
             <Marker
               key={vehicle.id}
-              position={[vehicle.lat as number, vehicle.lng as number]}
-              icon={onlineIcon(vehicle.isOnline)}
+              position={[vehicle.lat, vehicle.lng]}
+              icon={icons[vehicle.id]}
+              zIndexOffset={z}
+              keyboard={false}
+              eventHandlers={{ click: () => choose(vehicle.id) }}
+            />
+          );
+        })}
+      </MapContainer>
+
+      <header className="bar">
+        <div className="brand">Монитор</div>
+        <div className="hair" aria-hidden="true" />
+        <p className="counts">
+          <span>
+            <b>{onlineCount ?? '—'}</b> в сети
+          </span>
+          <span aria-hidden="true">·</span>
+          <span>
+            <b>{offlineCount ?? '—'}</b> без связи
+          </span>
+          <span aria-hidden="true">·</span>
+          <span>
+            <b>{criticalCount ?? '—'}</b> критических
+          </span>
+        </p>
+        <div className="spacer" />
+        <input
+          className="find"
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="номер или водитель"
+          aria-label="Поиск по номеру или водителю"
+        />
+        <nav className="filters" aria-label="Фильтр">
+          {FILTERS.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              className="control"
+              aria-pressed={filter === item.key}
+              onClick={() => setFilter(item.key)}
             >
-              <Popup>
-                <div className="min-w-[220px] space-y-2 text-sm">
-                  <div>
-                    <p className="font-semibold">{vehicle.driverName}</p>
-                    <p className="text-xs text-slate-500">{vehicle.licensePlate}</p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <p>Скорость: {vehicle.speed} км/ч</p>
-                    <p>Курс: {vehicle.heading}</p>
-                    <p className="col-span-2">
-                      Последнее обновление:{' '}
-                      {vehicle.timestamp ? formatDateTime(vehicle.timestamp) : 'Нет данных'}
-                    </p>
-                  </div>
-
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold uppercase text-slate-500">Последние события</p>
-                    {(eventsByVehicle[vehicle.id] || []).slice(0, 3).map((event) => (
-                      <div
-                        key={`${vehicle.id}-${event.id}`}
-                        className="flex items-center justify-between rounded-md bg-slate-100 px-2 py-1 text-xs"
-                      >
-                        <span>{formatEventType(event.type)}</span>
-                        <SeverityBadge severity={event.severity} />
-                      </div>
-                    ))}
-                    {!(eventsByVehicle[vehicle.id] || []).length && (
-                      <p className="text-xs text-slate-500">Нет недавних событий</p>
-                    )}
-                  </div>
-                </div>
-              </Popup>
-            </Marker>
+              {item.label}
+            </button>
           ))}
-        </MapContainer>
-      </Card>
+        </nav>
+        <div className="hair" aria-hidden="true" />
+        <nav className="filters links" aria-label="Разделы">
+          <Link to="/events" className="control">
+            журнал
+          </Link>
+          <Link to="/dashboard" className="control">
+            сводка
+          </Link>
+        </nav>
+        <div className="hair" aria-hidden="true" />
+        <p className={connected ? 'snap' : 'snap is-down'}>{connected ? 'поток: живой' : 'поток: нет связи'}</p>
+      </header>
+
+      <div className="caption" hidden={!captionOpen} aria-live="polite">
+        {phase === 'error' && (
+          <>
+            <p className="who">нет данных</p>
+            <p className="meta">не удалось получить список машин</p>
+          </>
+        )}
+        {phase === 'empty' && (
+          <>
+            <p className="who">пока нет машин</p>
+            <p className="meta">запустите симулятор, чтобы увидеть поток</p>
+          </>
+        )}
+        {phase === 'ready' && selected && (
+          <>
+            <p className="who">{selected.driverName}</p>
+            <p className="platenum">{selected.licensePlate}</p>
+            {selected.isOnline ? (
+              <p className="meta">
+                <span className="num">{selected.speed} км/ч</span>
+                {Number.isFinite(selected.heading) ? ` · ${compass(selected.heading)}` : ''}
+              </p>
+            ) : (
+              <p className="meta">{offlineLine(selected, now)}</p>
+            )}
+            {alertEvent && (
+              <p className="alert">
+                <EventPlace event={alertEvent} onLook={lookAtEvent} />
+                <button
+                  type="button"
+                  className="control dismiss"
+                  onClick={() => setDismissed((previous) => ({ ...previous, [alertEvent.id]: true }))}
+                >
+                  скрыть
+                </button>
+              </p>
+            )}
+            {selectedEvent && !alertEvent && (
+              <p className="meta">
+                <EventPlace event={selectedEvent} onLook={lookAtEvent} />
+              </p>
+            )}
+          </>
+        )}
+      </div>
+
+      <div className="film">
+        <div className="strip" id="strip" ref={stripRef}>
+          {phase === 'loading' && <p className="strip-note">загрузка</p>}
+          {phase === 'error' && <p className="strip-note">не удалось загрузить машины</p>}
+          {phase === 'empty' && <p className="strip-note">пока нет машин</p>}
+          {phase === 'ready' && ordered.length === 0 && <p className="strip-note">ничего по этому фильтру</p>}
+          {phase === 'ready' &&
+            ordered.map((vehicle) => {
+              const latest = latestEvent(eventsByVehicle[vehicle.id]);
+              const hot = latest?.severity === 'CRITICAL';
+              return (
+                <button
+                  key={vehicle.id}
+                  type="button"
+                  className="plate control"
+                  data-id={vehicle.id}
+                  aria-pressed={vehicle.id === selectedId}
+                  onClick={() => choose(vehicle.id)}
+                >
+                  <span className="plate-top">
+                    <span className="plate-num">{vehicle.licensePlate}</span>
+                    {latest && latest.groupCount > 1 ? <span className="times">×{latest.groupCount}</span> : null}
+                  </span>
+                  <span className="driver">{vehicle.driverName}</span>
+                  <span className={hot ? 'status is-hot' : 'status'}>{statusWord(vehicle, latest)}</span>
+                </button>
+              );
+            })}
+        </div>
+      </div>
     </div>
   );
 }

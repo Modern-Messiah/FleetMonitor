@@ -1,0 +1,645 @@
+<!-- form comes from treating the city as the photograph and the fleet as the film under it. -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Монитор</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+  :root {
+    --ink: #0A0A0A;
+    --type: #f5f5f5;
+    --line: rgba(255, 255, 255, 0.14);
+    --red: oklch(0.62 0.14 25);
+    --bar: 48px;
+    --film: 160px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: var(--ink);
+    color: var(--type);
+    color-scheme: dark;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.35;
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .control {
+    transition: transform 100ms ease-out;
+  }
+
+  .control:active {
+    transform: scale(0.97);
+  }
+
+  .control:focus { outline: none; }
+
+  .control:focus-visible {
+    outline: 1px solid var(--type);
+    outline-offset: 2px;
+  }
+
+  #map {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background: #d7d2c8;
+  }
+
+  .leaflet-container {
+    background: #d7d2c8;
+    font-family: inherit;
+  }
+
+  .leaflet-marker-icon.pin {
+    background: transparent;
+    border: 0;
+  }
+
+  .pin-rot {
+    position: relative;
+    display: block;
+    width: 36px;
+    height: 36px;
+  }
+
+  .pin .dot {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 8px;
+    height: 8px;
+    margin: -4px 0 0 -4px;
+    border-radius: 50%;
+    background: #f3f3f3;
+    box-shadow: 0 0 0 1px var(--ink);
+  }
+
+  .pin.is-sel .dot {
+    width: 12px;
+    height: 12px;
+    margin: -6px 0 0 -6px;
+  }
+
+  .pin.is-crit .dot { background: var(--red); }
+  .pin.is-off .dot { background: #8a8a8a; }
+
+  .pin .tick {
+    position: absolute;
+    left: 50%;
+    bottom: calc(50% + 8px);
+    width: 2px;
+    height: 8px;
+    margin-left: -1px;
+    display: block;
+    font-style: normal;
+    background: #f3f3f3;
+  }
+
+  .pin.is-crit .tick { background: var(--red); }
+
+  .leaflet-marker-icon { cursor: pointer; }
+
+  .bar {
+    position: absolute;
+    z-index: 2;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--bar);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 0 16px;
+    background: rgba(10, 10, 10, 0.72);
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .brand {
+    flex: 0 0 auto;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+  }
+
+  .hair {
+    flex: 0 0 auto;
+    width: 1px;
+    height: 16px;
+    background: var(--line);
+  }
+
+  .counts {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  .counts b { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .spacer { flex: 1 1 8px; }
+
+  .filters {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+  }
+
+  .filters .control {
+    padding: 8px;
+    color: #d0d0d0;
+    white-space: nowrap;
+  }
+
+  .filters .control[aria-pressed="true"] {
+    color: var(--type);
+    box-shadow: inset 0 -1px 0 var(--type);
+  }
+
+  .snap {
+    margin: 0;
+    white-space: nowrap;
+    flex: 0 0 auto;
+  }
+
+  .caption {
+    position: absolute;
+    z-index: 2;
+    top: calc(var(--bar) + 16px);
+    left: 16px;
+    max-width: 400px;
+    margin: 0;
+    color: var(--type);
+    font-size: 12px;
+    line-height: 1.35;
+    padding: 12px 14px;
+    background: rgba(10, 10, 10, 0.82);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    pointer-events: none;
+  }
+
+  .caption[hidden] { display: none; }
+
+  .caption p { margin: 0; }
+
+  .caption .who {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .caption .platenum {
+    letter-spacing: -0.03em;
+    margin-bottom: 8px;
+  }
+
+  .caption .alert {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-top: 8px;
+    color: var(--red);
+    pointer-events: auto;
+  }
+
+  .caption .dismiss {
+    color: var(--type);
+    font-size: 12px;
+    padding: 8px;
+    margin: -8px;
+  }
+
+  .film {
+    position: absolute;
+    z-index: 2;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: var(--film);
+    display: flex;
+    align-items: stretch;
+    background: var(--ink);
+    border-top: 1px solid var(--line);
+  }
+
+  .strip {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
+  }
+
+  .strip::-webkit-scrollbar { height: 8px; }
+  .strip::-webkit-scrollbar-track { background: transparent; }
+  .strip::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.28); }
+
+  .plate {
+    flex: 0 0 auto;
+    width: 240px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    text-align: left;
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--type);
+  }
+
+  .plate:hover { border-color: rgba(255, 255, 255, 0.32); }
+
+  .plate[aria-pressed="true"] {
+    border-color: rgba(255, 255, 255, 0.82);
+    background: var(--ink);
+  }
+
+  .plate-top {
+    width: 100%;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .plate-num {
+    font-size: 20px;
+    font-weight: 500;
+    line-height: 24px;
+    letter-spacing: -0.03em;
+  }
+
+  .times {
+    color: var(--red);
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .driver {
+    font-size: 14px;
+    line-height: 16px;
+  }
+
+  .status {
+    font-size: 14px;
+    line-height: 16px;
+  }
+
+  .status.is-hot { color: var(--red); }
+
+  .leaflet-top.leaflet-right {
+    top: calc(var(--bar) + 8px);
+    right: 8px;
+  }
+
+  .leaflet-bottom.leaflet-right {
+    bottom: var(--film);
+    margin: 0;
+  }
+
+  .leaflet-control-zoom {
+    border: 0 !important;
+    margin: 0 !important;
+  }
+
+  .leaflet-control-zoom a {
+    width: 32px !important;
+    height: 32px !important;
+    line-height: 30px !important;
+    font-size: 16px !important;
+    text-align: center;
+    text-decoration: none !important;
+    color: var(--type) !important;
+    background: var(--ink) !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 0 !important;
+    transition: transform 100ms ease-out;
+  }
+
+  .leaflet-control-zoom a:hover {
+    background: #141414 !important;
+    color: #fff !important;
+  }
+
+  .leaflet-control-zoom-in { border-bottom: 0 !important; }
+
+  .leaflet-control-zoom a:active { transform: scale(0.97); }
+
+  .leaflet-control-attribution {
+    background: var(--ink) !important;
+    color: var(--type) !important;
+    font-size: 12px !important;
+    line-height: 1.35 !important;
+    padding: 4px 8px !important;
+    margin: 0 8px 8px 0 !important;
+    border: 1px solid var(--line);
+    border-radius: 0;
+    max-width: 480px;
+  }
+
+  .leaflet-control-attribution a { color: #fff !important; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .control,
+    .control:active,
+    .leaflet-control-zoom a,
+    .leaflet-control-zoom a:active {
+      transition: none;
+      transform: none;
+    }
+  }
+</style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <header class="bar">
+    <div class="brand">Монитор</div>
+    <div class="hair" aria-hidden="true"></div>
+    <p class="counts">
+      <span><b>6</b> в сети</span>
+      <span aria-hidden="true">·</span>
+      <span><b>2</b> без связи</span>
+      <span aria-hidden="true">·</span>
+      <span><b>12</b> в депо, без сигнала</span>
+      <span aria-hidden="true">·</span>
+      <span><b>2</b> критических</span>
+    </p>
+    <div class="spacer"></div>
+    <nav class="filters" aria-label="Фильтр">
+      <button type="button" class="control" data-filter="all" aria-pressed="true">все</button>
+      <button type="button" class="control" data-filter="attention" aria-pressed="false">внимание</button>
+      <button type="button" class="control" data-filter="online" aria-pressed="false">в сети</button>
+      <button type="button" class="control" data-filter="offline" aria-pressed="false">без связи</button>
+    </nav>
+    <div class="hair" aria-hidden="true"></div>
+    <p class="snap">снимок смены · 14:32</p>
+    <p class="snap">поток: снимок</p>
+  </header>
+
+  <div id="caption" class="caption" hidden aria-live="polite"></div>
+
+  <div class="film">
+    <div class="strip" id="strip"></div>
+  </div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+  var vehicles = [
+    { id: "ALM-001", driver: "Айбек Нуртаев", plate: "KZ 100 AAA 02", online: true, speed: 62, heading: 84, level: "critical", event: "превышение скорости", group: 3, time: "14:28", lat: 43.256, lng: 76.910, attention: true },
+    { id: "ALM-002", driver: "Диана Сарсенова", plate: "KZ 101 AAB 02", online: true, speed: 41, heading: 190, level: "medium", event: "резкое торможение", group: null, time: "14:19", lat: 43.222, lng: 76.960, attention: false },
+    { id: "ALM-003", driver: "Руслан Омаров", plate: "KZ 102 AAC 02", online: true, speed: 0, heading: null, level: "low", event: "сонливость", group: null, time: "13:58", lat: 43.245, lng: 76.970, attention: false },
+    { id: "ALM-004", driver: "Нурайым Бекова", plate: "KZ 103 AAD 02", online: false, speed: null, heading: null, level: "none", event: null, group: null, time: null, offlineMin: 18, lat: 43.260, lng: 76.980, attention: false },
+    { id: "ALM-005", driver: "Ерлан Мукашев", plate: "KZ 104 AAE 02", online: true, speed: 55, heading: 20, level: "none", event: null, group: null, time: null, lat: 43.230, lng: 76.900, attention: false },
+    { id: "ALM-006", driver: "Алина Жексен", plate: "KZ 105 AAF 02", online: true, speed: 28, heading: 312, level: "critical", event: "опасность столкновения", group: null, time: "14:32", lat: 43.238, lng: 76.945, attention: true },
+    { id: "ALM-007", driver: "Нурсултан Есдаулет", plate: "KZ 106 AAG 02", online: true, speed: 12, heading: 140, level: "none", event: null, group: null, time: null, lat: 43.215, lng: 76.930, attention: false },
+    { id: "ALM-008", driver: "Самал Абилова", plate: "KZ 107 AAH 02", online: false, speed: null, heading: null, level: "none", event: null, group: null, time: null, offlineMin: 2, lat: 43.228, lng: 76.990, attention: true }
+  ];
+
+  var selectedId = "ALM-006";
+  var filterKey = "all";
+  var dismissed = {};
+  var markers = {};
+  var map;
+
+  function prefersReduce() {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  function compass(deg) {
+    var dirs = ["С", "СВ", "В", "ЮВ", "Ю", "ЮЗ", "З", "СЗ"];
+    var i = Math.round((((deg % 360) + 360) % 360) / 45) % 8;
+    return dirs[i];
+  }
+
+  function statusWord(v) {
+    if (v.level === "critical") return "смотри сейчас";
+    if (!v.online) return "нет связи";
+    if (v.speed === 0) return "стоит";
+    return "едет";
+  }
+
+  function eventLabel(v) {
+    return v.group ? v.event + " ×" + v.group : v.event;
+  }
+
+  function isVisible(v) {
+    if (filterKey === "attention") return v.attention;
+    if (filterKey === "online") return v.online;
+    if (filterKey === "offline") return !v.online;
+    return true;
+  }
+
+  function byId(id) {
+    for (var i = 0; i < vehicles.length; i++) {
+      if (vehicles[i].id === id) return vehicles[i];
+    }
+    return null;
+  }
+
+  function iconFor(v) {
+    var kind = v.level === "critical" ? " is-crit" : (!v.online ? " is-off" : "");
+    var sel = v.id === selectedId ? " is-sel" : "";
+    var rot = v.heading == null ? "" : ' style="transform:rotate(' + v.heading + 'deg)"';
+    var tick = v.heading == null ? "" : '<i class="tick"></i>';
+    return L.divIcon({
+      className: "pin" + kind + sel,
+      html: '<span class="pin-rot"' + rot + ">" + tick + '<b class="dot"></b></span>',
+      iconSize: [36, 36],
+      iconAnchor: [18, 18]
+    });
+  }
+
+  function refreshIcons() {
+    vehicles.forEach(function (v) {
+      var marker = markers[v.id];
+      if (!marker) return;
+      var el = marker.getElement();
+      if (el) el.classList.toggle("is-sel", v.id === selectedId);
+      var z = v.level === "critical" ? 400 : (v.online ? 200 : 0);
+      if (v.id === selectedId) z += 400;
+      marker.setZIndexOffset(z);
+    });
+  }
+
+  function applyVisibility() {
+    vehicles.forEach(function (v) {
+      var marker = markers[v.id];
+      if (!marker) return;
+      var show = isVisible(v);
+      if (show && !map.hasLayer(marker)) marker.addTo(map);
+      if (!show && map.hasLayer(marker)) map.removeLayer(marker);
+    });
+  }
+
+  function renderStrip() {
+    var strip = document.getElementById("strip");
+    var html = "";
+    vehicles.forEach(function (v) {
+      if (!isVisible(v)) return;
+      var hot = v.level === "critical";
+      var pressed = v.id === selectedId ? "true" : "false";
+      var times = v.group ? '<span class="times">×' + v.group + "</span>" : "";
+      html += '<button type="button" class="plate control" data-id="' + v.id + '" aria-pressed="' + pressed + '">'
+        + '<span class="plate-top"><span class="plate-num">' + v.plate + "</span>" + times + "</span>"
+        + '<span class="driver">' + v.driver + "</span>"
+        + '<span class="status' + (hot ? " is-hot" : "") + '">' + statusWord(v) + "</span>"
+        + "</button>";
+    });
+    strip.innerHTML = html;
+  }
+
+  function renderCaption() {
+    var el = document.getElementById("caption");
+    var v = selectedId ? byId(selectedId) : null;
+    if (!v) {
+      el.hidden = true;
+      el.innerHTML = "";
+      return;
+    }
+    var html = '<p class="who">' + v.driver + "</p>"
+      + '<p class="platenum">' + v.plate + "</p>";
+    if (v.online) {
+      var meta = '<span class="num">' + v.speed + " км/ч</span>";
+      if (v.heading != null) meta += " · " + compass(v.heading);
+      html += '<p class="meta">' + meta + "</p>";
+    } else {
+      html += '<p class="meta">нет связи · ' + v.offlineMin + " мин</p>";
+    }
+    if (v.event) {
+      var label = eventLabel(v) + " · " + v.time;
+      if (v.level === "critical" && !dismissed[v.id]) {
+        html += '<p class="alert"><span>' + label + '</span><button type="button" class="control dismiss" id="dismiss">скрыть</button></p>';
+      } else {
+        html += '<p class="meta">' + label + "</p>";
+      }
+    }
+    el.hidden = false;
+    el.innerHTML = html;
+    var dismiss = document.getElementById("dismiss");
+    if (dismiss) {
+      dismiss.addEventListener("click", function () {
+        dismissed[v.id] = true;
+        renderCaption();
+      });
+    }
+  }
+
+  function reveal(id, behavior) {
+    var strip = document.getElementById("strip");
+    var btn = strip.querySelector('[data-id="' + id + '"]');
+    if (!btn) return;
+    var pad = 16;
+    var stripRect = strip.getBoundingClientRect();
+    var btnRect = btn.getBoundingClientRect();
+    var delta = 0;
+    if (btnRect.left < stripRect.left + pad) delta = btnRect.left - stripRect.left - pad;
+    else if (btnRect.right > stripRect.right - pad) delta = btnRect.right - stripRect.right + pad;
+    if (delta === 0) return;
+    strip.scrollTo({ left: strip.scrollLeft + delta, behavior: behavior });
+  }
+
+  function panTo(v) {
+    var ll = [v.lat, v.lng];
+    map.panTo(ll, { animate: !prefersReduce(), duration: 0.45 });
+  }
+
+  function select(id, pan) {
+    selectedId = id;
+    if (id && !isVisible(byId(id))) {
+      selectedId = null;
+    }
+    refreshIcons();
+    renderStrip();
+    renderCaption();
+    if (!selectedId) return;
+    if (pan) panTo(byId(selectedId));
+    reveal(selectedId, prefersReduce() || !pan ? "auto" : "smooth");
+  }
+
+  function initMap() {
+    map = L.map("map", {
+      zoomControl: false,
+      center: [43.238, 76.945],
+      zoom: 13,
+      minZoom: 11,
+      maxZoom: 18
+    });
+    L.control.zoom({ position: "topright" }).addTo(map);
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
+      attribution: 'Tiles &copy; Esri',
+      subdomains: "abcd",
+      maxZoom: 20,
+      detectRetina: true
+    }).addTo(map);
+    vehicles.forEach(function (v) {
+      var marker = L.marker([v.lat, v.lng], { icon: iconFor(v), keyboard: false });
+      marker.on("click", function () { select(v.id, true); });
+      markers[v.id] = marker;
+    });
+    applyVisibility();
+    refreshIcons();
+  }
+
+  document.getElementById("strip").addEventListener("click", function (e) {
+    var btn = e.target.closest(".plate");
+    if (!btn) return;
+    select(btn.getAttribute("data-id"), true);
+  });
+
+  document.querySelector(".filters").addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-filter]");
+    if (!btn) return;
+    filterKey = btn.getAttribute("data-filter");
+    document.querySelectorAll("[data-filter]").forEach(function (b) {
+      b.setAttribute("aria-pressed", b === btn ? "true" : "false");
+    });
+    if (selectedId && !isVisible(byId(selectedId))) selectedId = null;
+    applyVisibility();
+    refreshIcons();
+    renderStrip();
+    renderCaption();
+    if (selectedId) reveal(selectedId, "auto");
+    else document.getElementById("strip").scrollLeft = 0;
+  });
+
+  window.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") select(null, false);
+  });
+
+  renderStrip();
+  renderCaption();
+  initMap();
+  reveal(selectedId, "auto");
+</script>
+</body>
+</html>

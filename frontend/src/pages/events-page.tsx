@@ -182,6 +182,9 @@ export function EventsPage() {
     queryKey: ['vehicles-select'],
     queryFn: async () => {
       const response = await api.get<Vehicle[]>('/vehicles');
+      if (!Array.isArray(response.data)) {
+        throw new Error('Список машин не получен');
+      }
       return response.data;
     },
   });
@@ -192,6 +195,9 @@ export function EventsPage() {
       const response = await api.get<EventsListResponse>('/events', {
         params: buildQueryParams(filters, page),
       });
+      if (!response.data || !Array.isArray(response.data.items)) {
+        throw new Error('Журнал не получен');
+      }
       return response.data;
     },
   });
@@ -279,7 +285,7 @@ export function EventsPage() {
   return (
     <div className="space-y-4">
       <Card className="space-y-1">
-        <CardTitle>Журнал событий</CardTitle>
+        <CardTitle>Журнал</CardTitle>
         <CardDescription>
           Фильтрация, поиск, экспорт CSV и получение новых событий в реальном времени.
         </CardDescription>
@@ -346,7 +352,7 @@ export function EventsPage() {
               value={filters.dateFrom}
               onChange={(event) => updateFilter('dateFrom', event.target.value)}
               placeholder="Дата от"
-              className="pr-9 [color-scheme:light] [&::-webkit-calendar-picker-indicator]:opacity-0"
+              className="pr-9 [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0"
             />
             <button
               type="button"
@@ -365,7 +371,7 @@ export function EventsPage() {
               value={filters.dateTo}
               onChange={(event) => updateFilter('dateTo', event.target.value)}
               placeholder="Дата до"
-              className="pr-9 [color-scheme:light] [&::-webkit-calendar-picker-indicator]:opacity-0"
+              className="pr-9 [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0"
             />
             <button
               type="button"
@@ -385,7 +391,9 @@ export function EventsPage() {
 
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm text-muted-foreground">
-            Всего: {(eventsQuery.data?.total ?? 0) + liveNewCount} событий
+            {eventsQuery.isError
+              ? 'Журнал не загрузился'
+              : `Всего: ${(eventsQuery.data?.total ?? 0) + liveNewCount} событий`}
           </p>
           <Button variant="outline" onClick={exportCsv}>
             Экспорт CSV
@@ -397,6 +405,10 @@ export function EventsPage() {
             <Skeleton className="h-10 w-full" />
             <Skeleton className="h-10 w-full" />
             <Skeleton className="h-10 w-full" />
+          </div>
+        ) : eventsQuery.isError ? (
+          <div className="border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+            Не удалось загрузить журнал.
           </div>
         ) : items.length ? (
           <div className="overflow-x-auto">
@@ -420,7 +432,7 @@ export function EventsPage() {
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <span>{formatEventType(item.type)}</span>
-                        {item.groupCount > 1 && <Badge variant="outline">x{item.groupCount}</Badge>}
+                        {item.groupCount > 1 && <Badge variant="outline">×{item.groupCount}</Badge>}
                       </div>
                     </TableCell>
                     <TableCell>

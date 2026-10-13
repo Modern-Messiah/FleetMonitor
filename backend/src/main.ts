@@ -14,6 +14,10 @@ async function bootstrap() {
     .map((value) => value.trim())
     .filter(Boolean);
   const allowedCorsOrigins = new Set([
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:8088',
+    'http://127.0.0.1:8088',
     'http://localhost:8080',
     'http://0.0.0.0:8080',
     ...corsOriginsFromEnv,

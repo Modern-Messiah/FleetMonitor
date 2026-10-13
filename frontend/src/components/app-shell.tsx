@@ -1,43 +1,28 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { cn } from '@/lib/utils';
 
 const navItems = [
-  { to: '/map', label: 'Карта' },
-  { to: '/events', label: 'События' },
-  { to: '/dashboard', label: 'Дашборд' },
+  { to: '/map', label: 'карта' },
+  { to: '/events', label: 'журнал' },
+  { to: '/dashboard', label: 'сводка' },
 ];
 
 export function AppShell() {
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-20 border-b border-border/70 bg-white/80 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-              Мониторинг автопарка
-            </p>
-            <h1 className="text-lg font-semibold">Консоль мониторинга автопарка</h1>
-          </div>
-          <nav className="flex gap-1 rounded-lg bg-secondary/60 p-1">
-            {navItems.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) =>
-                  cn(
-                    'rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors',
-                    isActive && 'bg-white text-foreground shadow-sm',
-                  )
-                }
-              >
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
-        </div>
+      <header className="chrome">
+        <NavLink to="/map" className="brand">
+          Монитор
+        </NavLink>
+        <div className="hair" aria-hidden="true" />
+        <nav className="filters" aria-label="Разделы">
+          {navItems.map((item) => (
+            <NavLink key={item.to} to={item.to} className="control">
+              {item.label}
+            </NavLink>
+          ))}
+        </nav>
       </header>
-
-      <main className="mx-auto max-w-7xl px-4 py-4 md:py-6">
+      <main className="mx-auto max-w-7xl px-4 py-6">
         <Outlet />
       </main>
     </div>

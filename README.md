@@ -2,6 +2,8 @@
 
 MVP системы мониторинга автопарка с realtime-картой, журналом событий, дашбордом, симулятором телеметрии и очередями для обработки потока данных.
 
+Правила для следующего агента: [AGENTS.md](AGENTS.md). Выбранный экран — `design-demos/01-gallery-dark.html`.
+
 ## Что реализовано
 
 - Монорепо на `pnpm workspaces` с сервисами:
@@ -29,12 +31,14 @@ MVP системы мониторинга автопарка с realtime-кар�
   - Swagger на `/api/docs`
   - глобальный `ValidationPipe`, `ExceptionFilter`, Winston-логирование
 - Frontend:
-  - роуты `/map`, `/events`, `/dashboard`
-  - live-карта с throttle обновлений маркеров (1 раз/сек)
-  - offline-индикация транспорта
-  - toast для CRITICAL событий
-  - журнал событий с фильтрами, поиском, pagination, realtime и CSV экспортом
-  - дашборд со статистикой, CRITICAL-лентой и top-5 графиком (`recharts`)
+  - рабочее место — `/map`: карта на весь экран и лента номеров снизу
+  - журнал (`/events`) и сводка (`/dashboard`) остаются отдельными экранами
+  - живые маркеры, общий выбор ленты и карты, поиск по номеру и водителю
+  - след выбранной машины: 10 последних точек из `GET /api/vehicles/:id`
+  - клик по строке события ставит карту на координаты события
+  - если Redis забыл координату, список отдаёт последнюю точку из `GpsPoint`, машина остаётся на карте серой
+  - журнал с фильтрами, поиском, pagination, realtime и CSV
+  - сводка со статистикой и графиком за час (`recharts`)
 - Docker:
   - `docker-compose` для `postgres`, `redis`, `rabbitmq`, `backend`, `simulator`, `frontend`
   - healthchecks и зависимости сервисов
@@ -60,9 +64,22 @@ MVP системы мониторинга автопарка с realtime-кар�
 pnpm install
 ```
 
-2. Подготовить переменные:
+2. Подготовить переменные.
 
-- Скопировать `.env.example` в `.env` (и при необходимости `backend/.env.example`, `frontend/.env.example`, `simulator/.env.example`)
+Корневой `.env.example` — для контейнеров: хосты `postgres`, `redis`, `rabbitmq`. Если backend и симулятор запущены на хосте, а в Docker только инфраструктура, в `backend/.env` нужны опубликованные порты:
+
+```bash
+DATABASE_URL=postgresql://user:pass@127.0.0.1:15432/fleet
+REDIS_URL=redis://127.0.0.1:16379
+RABBITMQ_URL=amqp://guest:guest@127.0.0.1:5672
+WEBHOOK_URL=https://webhook.site/your-uuid
+PORT=3000
+CORS_ORIGIN=http://localhost:5173,http://127.0.0.1:5173
+```
+
+Фронтенд при `pnpm dev` проксирует `/api` и `/socket.io` на `http://127.0.0.1:3000`. Файл `frontend/.env` не нужен. `VITE_API_URL` включает прямой запрос браузера на API и обходит прокси.
+
+Симулятор на хосте берёт `amqp://guest:guest@localhost:5672`. Имя хоста `rabbitmq` из `simulator/.env.example` работает только внутри compose.
 
 3. Поднять инфраструктуру (Postgres/Redis/RabbitMQ), например через docker:
 
@@ -88,6 +105,8 @@ pnpm --filter backend dev
 ```bash
 pnpm --filter frontend dev
 ```
+
+Dev-сервер: [http://localhost:5173/map](http://localhost:5173/map). Если репозиторий лежит на диске Windows и Vite запущен из WSL, нужен `CHOKIDAR_USEPOLLING=1`, иначе правки исходников не подхватываются. `nest start --watch` на том же диске тоже может не увидеть файл: после правки backend процесс нужно перезапустить.
 
 7. Запустить simulator:
 
@@ -152,6 +171,12 @@ docker compose up --build
   - число попыток
   - время последней попытки
   - текст ответа/ошибки
+
+## Как карта держит последнюю точку
+
+`GET /api/vehicles` берёт живую координату из Redis (`vehicle:{deviceId}:state`, TTL 30 секунд). Если ключа нет, в `state` подставляется последняя строка `GpsPoint`, а `isOnline` остаётся `false`. Маркер не пропадает: он серый, в карточке виден возраст точки. Пока ключ Redis есть, машина считается в сети.
+
+`GET /api/vehicles/:id` по-прежнему отдаёт 10 последних точек (`gpsPoints`, сначала новые) и 20 событий. Карта рисует из них след выбранной машины и кольцо на координатах последнего события.
 
 ## Trade-offs
 

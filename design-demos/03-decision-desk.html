@@ -1,0 +1,644 @@
+<!-- form comes from the next human decision, the map is only proof of where that decision is. -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Монитор</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <style>
+    :root {
+      color-scheme: light;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #F5F5F7;
+      color: #1D1D1F;
+    }
+
+    body {
+      font-family: system-ui, sans-serif;
+      font-size: 16px;
+      line-height: 1.4;
+      font-optical-sizing: auto;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      font-variant-numeric: tabular-nums;
+    }
+
+    button {
+      font: inherit;
+      color: inherit;
+      background: none;
+      border: 0;
+      padding: 0;
+      cursor: pointer;
+      user-select: none;
+      transition: transform 100ms;
+    }
+
+    button:active {
+      transform: scale(0.97);
+    }
+
+    :focus { outline: none; }
+
+    :focus-visible {
+      outline: 2px solid rgba(29, 29, 31, 0.45);
+      outline-offset: 3px;
+    }
+
+    ::selection {
+      background: rgba(29, 29, 31, 0.14);
+      color: #1D1D1F;
+    }
+
+    [hidden] { display: none !important; }
+
+    h1, h2, p { margin: 0; }
+
+    .bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      min-height: 76px;
+      padding: 14px 28px;
+      background: rgba(255, 255, 255, 0.72);
+      -webkit-backdrop-filter: blur(20px);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid #fff;
+    }
+
+    .wordmark {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      font-optical-sizing: auto;
+    }
+
+    .stats {
+      margin-top: 3px;
+      font-size: 14px;
+      line-height: 1.3;
+      color: #6E6E73;
+    }
+
+    .snapshot {
+      text-align: right;
+      font-size: 14px;
+      line-height: 1.4;
+      color: #6E6E73;
+    }
+
+    .workspace {
+      height: 100vh;
+      display: grid;
+      grid-template-columns: 58fr 42fr;
+    }
+
+    .decision {
+      min-width: 0;
+      height: 100vh;
+      padding: 96px 18px 28px 28px;
+      overflow: hidden;
+    }
+
+    .sheet {
+      height: 100%;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.08);
+      padding: 28px;
+    }
+
+    .eyebrow {
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.3;
+      letter-spacing: 0.01em;
+      color: #6E6E73;
+    }
+
+    .eyebrow.is-alert,
+    .sentence.is-alert,
+    .person-status.is-alert {
+      color: #FF3B30;
+    }
+
+    h2 { margin-top: 10px; }
+
+    .name-btn {
+      display: block;
+      width: 100%;
+      text-align: left;
+      font-family: system-ui, sans-serif;
+      font-size: 40px;
+      font-weight: 600;
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+      font-optical-sizing: auto;
+      font-variation-settings: "opsz" 40;
+      color: #1D1D1F;
+      cursor: default;
+    }
+
+    .plate {
+      margin-top: 8px;
+      font-size: 16px;
+      line-height: 1.35;
+      color: #6E6E73;
+    }
+
+    .sentence {
+      margin-top: 16px;
+      max-width: 38em;
+      font-size: 18px;
+      font-weight: 500;
+      line-height: 1.35;
+      letter-spacing: -0.011em;
+    }
+
+    .map {
+      width: 100%;
+      height: 220px;
+      margin-top: 16px;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #E8E8ED;
+    }
+
+    .map.leaflet-container {
+      z-index: 0;
+      height: 220px;
+      width: 100%;
+      font-family: system-ui, sans-serif;
+      background: #E8E8ED;
+    }
+
+    .leaflet-control-attribution {
+      font-size: 12px !important;
+      line-height: 1.25 !important;
+      background: rgba(255, 255, 255, 0.78) !important;
+      color: #6E6E73 !important;
+      padding: 2px 6px !important;
+    }
+
+    .leaflet-control-attribution a {
+      color: #6E6E73 !important;
+      text-decoration: none;
+    }
+
+    .queue {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      width: 100%;
+      margin-top: 22px;
+      padding: 18px 0 8px;
+      border-top: 1px solid rgba(29, 29, 31, 0.1);
+      text-align: left;
+    }
+
+    .queue-name {
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: -0.015em;
+      line-height: 1.25;
+    }
+
+    .queue-fact {
+      flex: none;
+      font-size: 15px;
+      line-height: 1.3;
+      color: #6E6E73;
+      text-align: right;
+    }
+
+    .actions {
+      display: flex;
+      align-items: flex-start;
+      gap: 36px;
+      margin-top: 18px;
+    }
+
+    .text-btn {
+      padding: 6px 2px;
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: -0.011em;
+      line-height: 1.2;
+    }
+
+    .hide-block {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .hint {
+      padding-left: 2px;
+      font-size: 12px;
+      line-height: 1.3;
+      color: #6E6E73;
+    }
+
+    .empty {
+      max-width: 16em;
+      font-size: 28px;
+      font-weight: 600;
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+      font-optical-sizing: auto;
+    }
+
+    .empty-rest {
+      display: block;
+      margin-top: 10px;
+      font-size: 16px;
+      font-weight: 400;
+      letter-spacing: 0;
+      line-height: 1.4;
+      color: #6E6E73;
+    }
+
+    .roster {
+      min-width: 0;
+      height: 100vh;
+      overflow: auto;
+      padding: 96px 20px 28px 12px;
+    }
+
+    .filters {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+      padding: 6px 8px 14px;
+    }
+
+    .filters button {
+      padding: 4px 0;
+      font-size: 15px;
+      line-height: 1.3;
+      color: #6E6E73;
+    }
+
+    .filters button[aria-pressed="true"] {
+      color: #1D1D1F;
+      font-weight: 600;
+    }
+
+    .people { list-style: none; margin: 0; padding: 0; }
+
+    .person {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      width: 100%;
+      padding: 15px 8px;
+      border-bottom: 1px solid rgba(29, 29, 31, 0.1);
+      text-align: left;
+    }
+
+    .people li:last-child .person { border-bottom: 0; }
+
+    .person.is-current { background: rgba(255, 255, 255, 0.7); }
+
+    .person-main { min-width: 0; }
+
+    .person-name {
+      display: block;
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: -0.015em;
+      line-height: 1.25;
+    }
+
+    .person-meta {
+      display: block;
+      margin-top: 3px;
+      font-size: 14px;
+      line-height: 1.3;
+      color: #6E6E73;
+    }
+
+    .person-status {
+      flex: none;
+      font-size: 15px;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      button { transition: none; }
+      button:active { transform: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="bar">
+    <div class="brand">
+      <h1 class="wordmark">Монитор</h1>
+      <p class="stats">6 в сети · 2 без связи · 12 в депо · 2 критических</p>
+    </div>
+    <div class="snapshot">
+      <p>снимок смены · 14:32</p>
+      <p>поток: снимок</p>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <section class="decision" aria-label="Решение">
+      <article class="sheet" id="sheet">
+        <div id="sheet-body">
+          <div class="eyebrow" id="eyebrow"></div>
+          <h2><button type="button" class="name-btn" id="name-btn"></button></h2>
+          <p class="plate" id="plate"></p>
+          <p class="sentence" id="sentence"></p>
+          <div id="map" class="map" aria-label="Место на карте"></div>
+          <button type="button" class="queue" id="queue" hidden>
+            <span class="queue-name" id="queue-name"></span>
+            <span class="queue-fact" id="queue-fact"></span>
+          </button>
+          <div class="actions">
+            <button type="button" class="text-btn" id="btn-next">Дальше</button>
+            <div class="hide-block">
+              <button type="button" class="text-btn" id="btn-hide">Скрыть</button>
+              <p class="hint">только на этом экране</p>
+            </div>
+          </div>
+        </div>
+        <div id="sheet-empty" hidden>
+          <p class="empty">Сейчас никого. <span class="empty-rest">6 машин едут без замечаний.</span></p>
+        </div>
+      </article>
+    </section>
+
+    <section class="roster" id="roster" aria-label="Машины на линии">
+      <div class="filters" id="filters">
+        <button type="button" data-filter="all" aria-pressed="true">все</button>
+        <button type="button" data-filter="attention" aria-pressed="false">внимание</button>
+        <button type="button" data-filter="offline" aria-pressed="false">без связи</button>
+      </div>
+      <ul class="people" id="people"></ul>
+    </section>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script>
+    var ALINA = "ALM-006";
+    var AIBEK = "ALM-001";
+    var ATTENTION = [ALINA, AIBEK, "ALM-008"];
+
+    var vehicles = [
+      { id: "ALM-006", name: "Алина Жексен", plate: "KZ 105 AAF 02", online: true, speed: 28, attention: true, lat: 43.238, lng: 76.945, sentence: "Опасность столкновения · 28 км/ч · курс СЗ · 14:32", alert: true, meta: "ALM-006 · KZ 105 AAF 02 · 28 км/ч", fact: "опасность столкновения · 28 км/ч" },
+      { id: "ALM-001", name: "Айбек Нуртаев", plate: "KZ 100 AAA 02", online: true, speed: 62, attention: true, lat: 43.256, lng: 76.910, sentence: "Превышение скорости ×3 · 62 км/ч · курс В · 14:28", alert: false, meta: "ALM-001 · KZ 100 AAA 02 · 62 км/ч", fact: "превышение ×3 · 62 км/ч" },
+      { id: "ALM-008", name: "Самал Абилова", plate: "KZ 107 AAH 02", online: false, speed: null, attention: true, lat: 43.228, lng: 76.990, sentence: "Нет связи · 2 мин", alert: false, meta: "ALM-008 · KZ 107 AAH 02 · 2 мин", fact: "нет связи · 2 мин" },
+      { id: "ALM-002", name: "Диана Сарсенова", plate: "KZ 101 AAB 02", online: true, speed: 41, attention: false, lat: 43.222, lng: 76.960, sentence: "Резкое торможение · 41 км/ч · курс Ю · 14:19", alert: false, meta: "ALM-002 · KZ 101 AAB 02 · 41 км/ч", fact: "резкое торможение · 41 км/ч" },
+      { id: "ALM-003", name: "Руслан Омаров", plate: "KZ 102 AAC 02", online: true, speed: 0, attention: false, lat: 43.245, lng: 76.970, sentence: "Сонливость · 0 км/ч · 13:58", alert: false, meta: "ALM-003 · KZ 102 AAC 02 · 0 км/ч", fact: "сонливость · 0 км/ч" },
+      { id: "ALM-004", name: "Нурайым Бекова", plate: "KZ 103 AAD 02", online: false, speed: null, attention: false, lat: 43.260, lng: 76.980, sentence: "Нет связи · 18 мин", alert: false, meta: "ALM-004 · KZ 103 AAD 02 · 18 мин", fact: "нет связи · 18 мин" },
+      { id: "ALM-005", name: "Ерлан Мукашев", plate: "KZ 104 AAE 02", online: true, speed: 55, attention: false, lat: 43.230, lng: 76.900, sentence: "Без замечаний · 55 км/ч · курс С", alert: false, meta: "ALM-005 · KZ 104 AAE 02 · 55 км/ч", fact: "55 км/ч · курс С" },
+      { id: "ALM-007", name: "Нурсултан Есдаулет", plate: "KZ 106 AAG 02", online: true, speed: 12, attention: false, lat: 43.215, lng: 76.930, sentence: "Без замечаний · 12 км/ч · курс ЮВ", alert: false, meta: "ALM-007 · KZ 106 AAG 02 · 12 км/ч", fact: "12 км/ч · курс ЮВ" }
+    ];
+
+    var byId = {};
+    vehicles.forEach(function (v) { byId[v.id] = v; });
+
+    var currentId = ALINA;
+    var empty = false;
+    var filter = "all";
+    var dismissed = new Set();
+    var map = null;
+    var marker = null;
+    var mappedId = null;
+
+    function factualStatus(v) {
+      if (!v.online) return "нет связи";
+      if (v.speed === 0) return "стоит";
+      return "едет";
+    }
+
+    function nextAttention(fromId) {
+      var start = ATTENTION.indexOf(fromId);
+      var step;
+      for (step = 1; step <= ATTENTION.length; step++) {
+        var id = ATTENTION[(start + step) % ATTENTION.length];
+        if (!dismissed.has(id)) return id;
+      }
+      return null;
+    }
+
+    function rowPersonId() {
+      if (empty || !currentId) return null;
+      if (currentId === ALINA && !dismissed.has(AIBEK)) return AIBEK;
+      if (currentId === AIBEK && !dismissed.has(ALINA)) return ALINA;
+      if (currentId !== ALINA && !dismissed.has(ALINA)) return ALINA;
+      if (currentId !== AIBEK && !dismissed.has(AIBEK)) return AIBEK;
+      var next = nextAttention(currentId);
+      if (next && next !== currentId) return next;
+      return null;
+    }
+
+    function focusPerson(id) {
+      if (!byId[id]) return;
+      dismissed.delete(id);
+      empty = false;
+      currentId = id;
+      render();
+    }
+
+    function goNext() {
+      if (empty || !currentId) return;
+      var next = nextAttention(currentId);
+      if (!next || next === currentId) return;
+      currentId = next;
+      empty = false;
+      render();
+    }
+
+    function hideCurrent() {
+      if (empty || !currentId) return;
+      var leaving = currentId;
+      if (ATTENTION.indexOf(leaving) !== -1) dismissed.add(leaving);
+      var next = nextAttention(leaving);
+      if (next) {
+        currentId = next;
+        empty = false;
+      } else {
+        currentId = null;
+        empty = true;
+      }
+      render();
+    }
+
+    function syncMap(v) {
+      var el = document.getElementById("map");
+      el.hidden = false;
+      el.setAttribute("aria-label", "Место · " + v.name);
+      if (typeof L === "undefined") return;
+      if (!map) {
+        map = L.map(el, {
+          zoomControl: false,
+          attributionControl: true,
+          scrollWheelZoom: false,
+          dragging: false,
+          doubleClickZoom: false,
+          boxZoom: false,
+          keyboard: false,
+          touchZoom: false,
+          fadeAnimation: false,
+          zoomAnimation: false,
+          markerZoomAnimation: false
+        }).setView([v.lat, v.lng], 14);
+        L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
+          attribution: "Tiles &copy; Esri",
+          subdomains: "abcd",
+          maxZoom: 20
+        }).addTo(map);
+        marker = L.circleMarker([v.lat, v.lng], {
+          radius: 6,
+          color: "#FFFFFF",
+          weight: 3,
+          fillColor: "#1D1D1F",
+          fillOpacity: 1,
+          interactive: false
+        }).addTo(map);
+        mappedId = v.id;
+      } else if (mappedId !== v.id) {
+        map.setView([v.lat, v.lng], 14, { animate: false });
+        marker.setLatLng([v.lat, v.lng]);
+        mappedId = v.id;
+      }
+      requestAnimationFrame(function () {
+        if (map) map.invalidateSize();
+      });
+      setTimeout(function () {
+        if (map) map.invalidateSize();
+      }, 250);
+    }
+
+    function renderSheet() {
+      var body = document.getElementById("sheet-body");
+      var blank = document.getElementById("sheet-empty");
+      if (empty || !currentId) {
+        body.hidden = true;
+        blank.hidden = false;
+        return;
+      }
+      body.hidden = false;
+      blank.hidden = true;
+      var v = byId[currentId];
+      var eyebrow = document.getElementById("eyebrow");
+      if (v.attention) {
+        eyebrow.textContent = "смотри сейчас";
+        eyebrow.className = "eyebrow is-alert";
+      } else {
+        eyebrow.textContent = factualStatus(v);
+        eyebrow.className = "eyebrow";
+      }
+      document.getElementById("name-btn").textContent = v.name;
+      document.getElementById("plate").textContent = v.id + " · " + v.plate;
+      var sentence = document.getElementById("sentence");
+      sentence.textContent = v.sentence;
+      sentence.className = v.alert ? "sentence is-alert" : "sentence";
+      var rowId = rowPersonId();
+      var queue = document.getElementById("queue");
+      if (!rowId) {
+        queue.hidden = true;
+      } else {
+        var other = byId[rowId];
+        queue.hidden = false;
+        queue.setAttribute("data-id", other.id);
+        document.getElementById("queue-name").textContent = other.name;
+        document.getElementById("queue-fact").textContent = other.fact;
+      }
+      syncMap(v);
+    }
+
+    function passes(v) {
+      if (filter === "attention") return v.attention;
+      if (filter === "offline") return !v.online;
+      return true;
+    }
+
+    function renderList() {
+      var roster = document.getElementById("roster");
+      var top = roster.scrollTop;
+      var ul = document.getElementById("people");
+      ul.replaceChildren();
+      vehicles.filter(passes).forEach(function (v) {
+        var li = document.createElement("li");
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "person" + (!empty && v.id === currentId ? " is-current" : "");
+        var looking = !empty && v.id === currentId && v.attention;
+        var status = looking ? "смотри сейчас" : factualStatus(v);
+        btn.innerHTML =
+          '<span class="person-main"><span class="person-name"></span><span class="person-meta"></span></span>' +
+          '<span class="person-status"></span>';
+        btn.querySelector(".person-name").textContent = v.name;
+        btn.querySelector(".person-meta").textContent = v.meta;
+        var statusEl = btn.querySelector(".person-status");
+        statusEl.textContent = status;
+        if (looking) statusEl.classList.add("is-alert");
+        btn.addEventListener("click", function () { focusPerson(v.id); });
+        li.appendChild(btn);
+        ul.appendChild(li);
+      });
+      roster.scrollTop = top;
+      document.querySelectorAll("#filters button").forEach(function (btn) {
+        btn.setAttribute("aria-pressed", btn.getAttribute("data-filter") === filter ? "true" : "false");
+      });
+    }
+
+    function render() {
+      renderSheet();
+      renderList();
+    }
+
+    document.getElementById("name-btn").addEventListener("click", function () {
+      if (empty || currentId !== ALINA) return;
+    });
+
+    document.getElementById("queue").addEventListener("click", function () {
+      var id = document.getElementById("queue").getAttribute("data-id");
+      if (!id) return;
+      focusPerson(id);
+    });
+
+    document.getElementById("btn-next").addEventListener("click", goNext);
+    document.getElementById("btn-hide").addEventListener("click", hideCurrent);
+
+    document.getElementById("filters").addEventListener("click", function (event) {
+      var btn = event.target.closest("button");
+      if (!btn) return;
+      filter = btn.getAttribute("data-filter");
+      render();
+    });
+
+    window.addEventListener("keydown", function (event) {
+      if (event.key !== "Escape") return;
+      if (empty || currentId === ALINA || dismissed.has(ALINA)) return;
+      event.preventDefault();
+      currentId = ALINA;
+      empty = false;
+      render();
+    });
+
+    render();
+  </script>
+</body>
+</html>

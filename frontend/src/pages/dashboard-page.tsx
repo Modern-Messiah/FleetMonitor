@@ -85,6 +85,9 @@ async function fetchDashboardData(): Promise<DashboardData> {
     }),
   ]);
 
+  if (!Array.isArray(vehiclesResponse.data)) {
+    throw new Error('Список машин не получен');
+  }
   const vehicles = vehiclesResponse.data;
 
   const counts = new Map<string, { name: string; count: number }>();
@@ -145,7 +148,7 @@ export function DashboardPage() {
   if (dashboardQuery.isError || !data) {
     return (
       <Card className="space-y-2 p-5">
-        <CardTitle>Не удалось загрузить дашборд</CardTitle>
+        <CardTitle>Не удалось загрузить сводку</CardTitle>
         <CardDescription>Не получилось получить аналитику с backend API.</CardDescription>
       </Card>
     );
@@ -154,15 +157,15 @@ export function DashboardPage() {
   return (
     <div className="space-y-4">
       <Card className="space-y-1">
-        <CardTitle>Дашборд автопарка</CardTitle>
+        <CardTitle>Сводка</CardTitle>
         <CardDescription>Аналитика автоматически обновляется каждые 30 секунд.</CardDescription>
       </Card>
 
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Онлайн машин" value={data.onlineVehicles} note="Обновляется по живому состоянию из Redis" />
-        <StatCard title="Оффлайн машин" value={data.offlineVehicles} note="Нет GPS-обновлений за последнее время" />
-        <StatCard title="Событий за час" value={data.eventsLastHour} note="Последние 60 минут" />
-        <StatCard title="Событий за день" value={data.eventsLastDay} note="Последние 24 часа" />
+        <StatCard title="В сети" value={data.onlineVehicles} note="Живое состояние" />
+        <StatCard title="Без связи" value={data.offlineVehicles} note="Нет свежего GPS" />
+        <StatCard title="За час" value={data.eventsLastHour} note="Последние 60 минут" />
+        <StatCard title="За сутки" value={data.eventsLastDay} note="Последние 24 часа" />
       </div>
 
       <Card className="space-y-3">
@@ -171,17 +174,33 @@ export function DashboardPage() {
           {chartData.length ? (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 24 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.14)" />
                 <XAxis
                   dataKey="name"
                   angle={-18}
                   interval={0}
                   textAnchor="end"
-                  tick={{ fontSize: 12 }}
+                  stroke="rgba(255,255,255,0.14)"
+                  tick={{ fontSize: 12, fill: '#f5f5f5' }}
                 />
-                <YAxis allowDecimals={false} />
-                <Tooltip />
-                <Bar dataKey="count" name="Событий" fill="#2563eb" radius={[6, 6, 0, 0]} />
+                <YAxis
+                  allowDecimals={false}
+                  stroke="rgba(255,255,255,0.14)"
+                  tick={{ fontSize: 12, fill: '#f5f5f5' }}
+                />
+                <Tooltip
+                  cursor={{ fill: 'rgba(255,255,255,0.06)' }}
+                  contentStyle={{
+                    background: '#0A0A0A',
+                    border: '1px solid rgba(255,255,255,0.14)',
+                    borderRadius: 0,
+                    color: '#f5f5f5',
+                    fontSize: 12,
+                  }}
+                  labelStyle={{ color: '#f5f5f5' }}
+                  itemStyle={{ color: '#f5f5f5' }}
+                />
+                <Bar dataKey="count" name="Событий" fill="#c4543c" radius={[0, 0, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (

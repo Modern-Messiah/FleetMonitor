@@ -1,0 +1,673 @@
+<!-- form comes from the airport board, one line per vehicle, the map only to show where that line is. -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Монитор</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+  :root {
+    --bg: #12110F;
+    --text: #F3EFE6;
+    --muted: #C8BFAE;
+    --line: rgba(243, 239, 230, 0.16);
+    --fill: #3A3228;
+    --hover: #221E19;
+    --now: oklch(0.75 0.12 75);
+  }
+
+  * { box-sizing: border-box; }
+
+  html {
+    height: 100%;
+    overflow: hidden;
+    color-scheme: dark;
+  }
+
+  body {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 24px;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+
+  h1, p { margin: 0; }
+
+  button {
+    font: inherit;
+    color: inherit;
+    background: transparent;
+    border: 0;
+    margin: 0;
+    padding: 0;
+    border-radius: 0;
+    text-align: left;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button,
+  .leaflet-control-zoom a {
+    transition: transform 100ms linear;
+  }
+
+  button:active,
+  .leaflet-control-zoom a:active {
+    transform: scale(0.97);
+  }
+
+  button:focus { outline: none; }
+
+  button:focus-visible,
+  .leaflet-control-zoom a:focus-visible {
+    outline: 1px solid var(--text);
+    outline-offset: 2px;
+  }
+
+  [hidden] { display: none !important; }
+
+  .app {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .map-wrap {
+    position: relative;
+    flex: 0 0 46%;
+    height: 46%;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  #map {
+    height: 100%;
+    width: 100%;
+    position: relative;
+    z-index: 1;
+    background: #d7d2c8;
+  }
+
+  .map-fallback {
+    padding: 24px;
+    color: var(--muted);
+  }
+
+  .brand,
+  .flow {
+    position: absolute;
+    z-index: 3;
+    pointer-events: none;
+    background: rgba(18, 17, 15, 0.82);
+    padding: 8px 12px;
+  }
+
+  .brand { top: 24px; left: 24px; }
+
+  .flow {
+    top: 24px;
+    right: 24px;
+    line-height: 32px;
+  }
+
+  h1 {
+    font-size: 24px;
+    line-height: 32px;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+  }
+
+  .snap { line-height: 24px; }
+
+  .board {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--line);
+    background: var(--bg);
+  }
+
+  .fact {
+    flex: none;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .fact p {
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .dismiss {
+    flex: none;
+    height: 32px;
+    padding: 0 8px;
+    color: var(--muted);
+  }
+
+  .dismiss:hover { color: var(--text); }
+
+  .head {
+    flex: none;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .seg {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    height: 100%;
+  }
+
+  .seg button {
+    height: 32px;
+    color: var(--muted);
+    border-bottom: 1px solid transparent;
+  }
+
+  .seg button:hover { color: var(--text); }
+
+  .seg button[aria-pressed="true"] {
+    color: var(--text);
+    font-weight: 500;
+    border-bottom-color: var(--text);
+  }
+
+  .counts {
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .rows {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(243, 239, 230, 0.3) transparent;
+  }
+
+  .rows::-webkit-scrollbar { width: 8px; }
+  .rows::-webkit-scrollbar-track { background: transparent; }
+  .rows::-webkit-scrollbar-thumb { background: rgba(243, 239, 230, 0.3); }
+
+  .line {
+    display: grid;
+    grid-template-columns: 280px minmax(200px, 1fr) 160px 112px 56px minmax(240px, 1.6fr) 80px;
+    column-gap: 16px;
+    align-items: center;
+    padding: 0 24px;
+    white-space: nowrap;
+  }
+
+  .line > * {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .cols {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    height: 40px;
+    color: var(--muted);
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .row {
+    display: block;
+    width: 100%;
+    background: transparent;
+  }
+
+  .row .line {
+    width: 100%;
+    height: 48px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .row:hover { background: var(--hover); }
+
+  .row.is-on,
+  .row.is-on:hover { background: var(--fill); }
+
+  .row:focus-visible { outline-offset: -1px; }
+
+  .ident {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    overflow: hidden;
+  }
+
+  .plate {
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    flex: none;
+  }
+
+  .unit {
+    color: var(--muted);
+    font-weight: 500;
+    flex: none;
+  }
+
+  .status { font-weight: 500; }
+
+  .status.is-now { color: #DAA24F; }
+
+  .speed { text-align: right; }
+
+  .mult { font-weight: 500; }
+
+  .depot {
+    flex: none;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+  }
+
+  .leaflet-container {
+    background: var(--bg);
+    font-family: system-ui, sans-serif;
+  }
+
+  .leaflet-control-zoom.leaflet-bar {
+    border: 0;
+    box-shadow: none;
+    border-radius: 0;
+  }
+
+  .leaflet-touch .leaflet-control-zoom.leaflet-bar a,
+  .leaflet-control-zoom.leaflet-bar a {
+    width: 32px;
+    height: 32px;
+    line-height: 32px;
+    background: #12110F;
+    color: #F3EFE6;
+    border: 1px solid rgba(243, 239, 230, 0.2);
+    border-radius: 0;
+    font-family: system-ui, sans-serif;
+    font-size: 16px;
+  }
+
+  .leaflet-control-zoom.leaflet-bar a:hover {
+    background: #221E19;
+    color: #F3EFE6;
+  }
+
+  .leaflet-control-zoom.leaflet-bar a.leaflet-disabled {
+    background: #12110F;
+    color: var(--muted);
+    opacity: 0.45;
+  }
+
+  .leaflet-bottom.leaflet-right .leaflet-control {
+    margin-right: 16px;
+    margin-bottom: 16px;
+  }
+
+  .leaflet-bottom.leaflet-left .leaflet-control {
+    margin-left: 16px;
+    margin-bottom: 16px;
+  }
+
+  .leaflet-control-attribution {
+    background: #12110F !important;
+    color: var(--muted) !important;
+    font-family: system-ui, sans-serif !important;
+    font-size: 14px !important;
+    line-height: 24px !important;
+    padding: 0 8px !important;
+    border-radius: 0 !important;
+    max-width: none;
+  }
+
+  .leaflet-control-attribution a { color: var(--text) !important; }
+
+  .pin {
+    background: transparent !important;
+    border: 0 !important;
+  }
+
+  .mk {
+    position: relative;
+    width: 24px;
+    height: 24px;
+    --mk: #1c1a17;
+  }
+
+  .mk.critical { --mk: #C47B12; }
+  .mk.off { --mk: #8d877c; }
+
+  @supports (color: oklch(0.75 0.12 75)) {
+    .status.is-now { color: var(--now); }
+    .mk.critical { --mk: var(--now); }
+  }
+
+  .mk .dot {
+    position: absolute;
+    left: 9px;
+    top: 9px;
+    width: 8px;
+    height: 8px;
+    margin: -1px 0 0 -1px;
+    border-radius: 50%;
+    background: var(--mk);
+    box-shadow: 0 0 0 2px #fff;
+  }
+
+  .mk .tick {
+    position: absolute;
+    left: 11px;
+    top: 2px;
+    width: 2px;
+    height: 10px;
+    background: var(--mk);
+    transform-origin: 1px 10px;
+    transform: rotate(var(--h, 0deg));
+  }
+
+  .mk.on .dot {
+    box-shadow: 0 0 0 1px #12110F, 0 0 0 3px #F3EFE6;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation: none !important;
+      transition: none !important;
+      scroll-behavior: auto !important;
+    }
+
+    button:active,
+    .leaflet-control-zoom a:active {
+      transform: none !important;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="map-wrap">
+    <div id="map" role="region" aria-label="Карта бортов"></div>
+    <div class="brand">
+      <h1>Монитор</h1>
+      <p class="snap">снимок смены · 14:32</p>
+    </div>
+    <p class="flow">поток: снимок</p>
+  </div>
+
+  <main class="board">
+    <div class="fact" id="fact">
+      <p>Алина Жексен · опасность столкновения · 14:32</p>
+      <button type="button" class="dismiss" id="dismiss">скрыть</button>
+    </div>
+
+    <div class="head">
+      <div class="seg" role="group" aria-label="Фильтр">
+        <button type="button" data-filter="attention" aria-pressed="true">внимание</button>
+        <button type="button" data-filter="moving" aria-pressed="false">в движении</button>
+        <button type="button" data-filter="all" aria-pressed="false">все</button>
+      </div>
+      <p class="counts">6 в сети · 2 без связи · 2 критических</p>
+    </div>
+
+    <div class="rows" id="rows">
+      <div class="cols line">
+        <span>номер</span>
+        <span>водитель</span>
+        <span>статус</span>
+        <span class="speed">скорость</span>
+        <span>курс</span>
+        <span>событие</span>
+        <span>время</span>
+      </div>
+    </div>
+
+    <p class="depot">12 в депо, без сигнала</p>
+  </main>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+  var VEHICLES = [
+    { id: 'ALM-006', plate: 'KZ 105 AAF 02', driver: 'Алина Жексен', speed: 28, heading: 312, status: 'смотри сейчас', event: 'опасность столкновения', time: '14:32', lat: 43.238, lng: 76.945, critical: true, attention: true },
+    { id: 'ALM-001', plate: 'KZ 100 AAA 02', driver: 'Айбек Нуртаев', speed: 62, heading: 84, status: 'смотри сейчас', event: 'превышение скорости', group: 3, time: '14:28', lat: 43.256, lng: 76.910, critical: true, attention: true },
+    { id: 'ALM-008', plate: 'KZ 107 AAH 02', driver: 'Самал Абилова', speed: null, heading: null, status: 'нет связи', event: '', time: '2\u00A0мин', lat: 43.228, lng: 76.990, critical: false, attention: true, offline: true },
+    { id: 'ALM-002', plate: 'KZ 101 AAB 02', driver: 'Диана Сарсенова', speed: 41, heading: 190, status: 'едет', event: 'резкое торможение', time: '14:19', lat: 43.222, lng: 76.960, critical: false, attention: false },
+    { id: 'ALM-003', plate: 'KZ 102 AAC 02', driver: 'Руслан Омаров', speed: 0, heading: null, status: 'стоит', event: 'сонливость', time: '13:58', lat: 43.245, lng: 76.970, critical: false, attention: false },
+    { id: 'ALM-004', plate: 'KZ 103 AAD 02', driver: 'Нурайым Бекова', speed: null, heading: null, status: 'нет связи', event: '', time: '18\u00A0мин', lat: 43.260, lng: 76.980, critical: false, attention: false, offline: true },
+    { id: 'ALM-005', plate: 'KZ 104 AAE 02', driver: 'Ерлан Мукашев', speed: 55, heading: 20, status: 'едет', event: '', time: '', lat: 43.230, lng: 76.900, critical: false, attention: false },
+    { id: 'ALM-007', plate: 'KZ 106 AAG 02', driver: 'Нурсултан Есдаулет', speed: 12, heading: 140, status: 'едет', event: '', time: '', lat: 43.215, lng: 76.930, critical: false, attention: false }
+  ];
+
+  var byId = {};
+  VEHICLES.forEach(function (v) { byId[v.id] = v; });
+
+  var mode = 'attention';
+  var selected = null;
+  var map = null;
+  var markerById = {};
+  var motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  function motionOn() {
+    return !motionQuery.matches;
+  }
+
+  function compass(deg) {
+    if (deg == null) return '—';
+    var dirs = ['С', 'СВ', 'В', 'ЮВ', 'Ю', 'ЮЗ', 'З', 'СЗ'];
+    return dirs[Math.round(deg / 45) % 8];
+  }
+
+  function visible(v) {
+    if (mode === 'attention') return v.attention;
+    if (mode === 'moving') return typeof v.speed === 'number' && v.speed > 0;
+    return true;
+  }
+
+  function eventHTML(v) {
+    if (!v.event) return '—';
+    if (v.group) return v.event + ' <span class="mult">×' + v.group + '</span>';
+    return v.event;
+  }
+
+  function makeRow(v) {
+    var on = selected === v.id;
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'row' + (on ? ' is-on' : '');
+    btn.dataset.id = v.id;
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    var speed = v.speed == null ? '—' : v.speed + '\u00A0км/ч';
+    var course = compass(v.heading);
+    var title = v.heading == null ? '' : ' title="' + v.heading + '°"';
+    var time = v.time || '—';
+    var statusClass = v.status === 'смотри сейчас' ? 'status is-now' : 'status';
+    btn.innerHTML =
+      '<span class="line">' +
+      '<span class="ident"><span class="plate">' + v.plate + '</span><span class="unit">' + v.id + '</span></span>' +
+      '<span class="driver">' + v.driver + '</span>' +
+      '<span class="' + statusClass + '">' + v.status + '</span>' +
+      '<span class="speed">' + speed + '</span>' +
+      '<span class="course"' + title + '>' + course + '</span>' +
+      '<span class="event">' + eventHTML(v) + '</span>' +
+      '<span class="when">' + time + '</span>' +
+      '</span>';
+    btn.addEventListener('click', function () { choose(v.id); });
+    return btn;
+  }
+
+  function renderRows() {
+    var box = document.getElementById('rows');
+    box.querySelectorAll('.row').forEach(function (n) { n.remove(); });
+    VEHICLES.filter(visible).forEach(function (v) {
+      box.appendChild(makeRow(v));
+    });
+  }
+
+  function paintRows() {
+    document.querySelectorAll('.row').forEach(function (btn) {
+      var on = btn.dataset.id === selected;
+      btn.classList.toggle('is-on', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+
+  function reveal(el) {
+    var box = document.getElementById('rows');
+    var head = box.querySelector('.cols');
+    var headH = head ? head.offsetHeight : 0;
+    var elRect = el.getBoundingClientRect();
+    var boxRect = box.getBoundingClientRect();
+    var topLimit = boxRect.top + headH;
+    if (elRect.top < topLimit) box.scrollTop -= topLimit - elRect.top;
+    else if (elRect.bottom > boxRect.bottom) box.scrollTop += elRect.bottom - boxRect.bottom;
+  }
+
+  function iconFor(v, on) {
+    var cls = 'mk';
+    if (v.critical) cls += ' critical';
+    else if (v.offline) cls += ' off';
+    if (on) cls += ' on';
+    var tick = v.heading == null ? '' : '<span class="tick"></span>';
+    var h = v.heading == null ? 0 : v.heading;
+    return L.divIcon({
+      className: 'pin',
+      html: '<div class="' + cls + '" style="--h:' + h + 'deg">' + tick + '<span class="dot"></span></div>',
+      iconSize: [24, 24],
+      iconAnchor: [12, 12]
+    });
+  }
+
+  function syncMarkers() {
+    VEHICLES.forEach(function (v) {
+      var marker = markerById[v.id];
+      if (!marker) return;
+      var on = selected === v.id;
+      marker.setIcon(iconFor(v, on));
+      marker.setZIndexOffset(on ? 1000 : v.critical ? 500 : 0);
+    });
+  }
+
+  function choose(id) {
+    var v = byId[id];
+    if (!v) return;
+    selected = id;
+    paintRows();
+    syncMarkers();
+    var el = document.querySelector('.row[data-id="' + id + '"]');
+    if (el) reveal(el);
+    if (map) {
+      map.panTo([v.lat, v.lng], motionOn() ? { animate: true, duration: 0.35 } : { animate: false });
+    }
+  }
+
+  function clearSelection() {
+    if (!selected) return;
+    selected = null;
+    paintRows();
+    syncMarkers();
+  }
+
+  function setMode(next) {
+    mode = next;
+    document.querySelectorAll('.seg button').forEach(function (b) {
+      b.setAttribute('aria-pressed', b.dataset.filter === next ? 'true' : 'false');
+    });
+    renderRows();
+  }
+
+  function initMap() {
+    if (!window.L) {
+      var note = document.createElement('p');
+      note.className = 'map-fallback';
+      note.textContent = 'Карта не загрузилась';
+      document.getElementById('map').appendChild(note);
+      return;
+    }
+
+    map = L.map('map', {
+      zoomControl: false,
+      fadeAnimation: motionOn(),
+      zoomAnimation: motionOn(),
+      markerZoomAnimation: motionOn()
+    }).setView([43.238, 76.945], 13);
+
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+      attribution: 'Tiles &copy; Esri',
+      subdomains: 'abcd',
+      maxZoom: 20
+    }).addTo(map);
+
+    map.attributionControl.setPrefix(false);
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+    VEHICLES.forEach(function (v) {
+      var marker = L.marker([v.lat, v.lng], {
+        icon: iconFor(v, false),
+        title: v.plate + ' · ' + v.driver,
+        keyboard: false,
+        riseOnHover: false
+      });
+      marker.on('click', function () { choose(v.id); });
+      marker.addTo(map);
+      markerById[v.id] = marker;
+    });
+
+    requestAnimationFrame(function () { map.invalidateSize(); });
+  }
+
+  document.querySelectorAll('.seg button').forEach(function (btn) {
+    btn.addEventListener('click', function () { setMode(btn.dataset.filter); });
+  });
+
+  document.getElementById('dismiss').addEventListener('click', function () {
+    document.getElementById('fact').hidden = true;
+    document.querySelector('.seg button[data-filter="attention"]').focus();
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') clearSelection();
+  });
+
+  renderRows();
+  initMap();
+  window.addEventListener('load', function () {
+    if (map) map.invalidateSize();
+  });
+</script>
+</body>
+</html>
